@@ -99,43 +99,56 @@
     <div class="kicker">CI / CD & IaC</div>
     <h1>Sonatype Nexus 3</h1>
     <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    <p class="lede">Artifact and container registry for the lab — Maven repos live, Docker hosted now serving on port 5000, Docker proxy and group still to come.</p>
+    <p class="lede">Artifact and container registry for the lab — Maven and NuGet repos live, Docker hosted serving on port 5000, Docker Hub + Quay proxy repos staged, edge DC↔DR failover wired and proven.</p>
   </header>
 
   <section class="card">
     <h2>Quick facts</h2>
     <dl class="meta meta-grid">
       <dt>UI / REST</dt><dd><code>https://nexus.apps.sub.comptech-lab.com</code></dd>
-      <dt>Docker registry</dt><dd><code>https://nexus-docker.apps.sub.comptech-lab.com</code> (HTTP connector :5000)</dd>
+      <dt>Docker registry</dt><dd><code>https://nexus-docker.apps.sub.comptech-lab.com</code> (HTTP connector :5000, <code>forceBasicAuth: true</code>)</dd>
       <dt>Edition / version</dt><dd>Sonatype Nexus 3.74.0-05 (OSS)</dd>
       <dt>Storage</dt><dd>Longhorn-backed PVC (100 Gi per cluster), single blob store <code>default</code></dd>
-      <dt>Live repos (each cluster)</dt><dd><code>maven-releases</code>, <code>maven-snapshots</code>, <code>maven-central</code> (proxy), <code>maven-public</code> (group), <code>nuget-hosted</code>, <code>nuget.org-proxy</code>, <code>nuget-group</code>, <code>docker-hosted</code></dd>
+      <dt>Repositories (each cluster)</dt><dd>
+        <strong>Maven</strong>: <code>maven-releases</code>, <code>maven-snapshots</code>, <code>maven-central</code> (proxy), <code>maven-public</code> (group).
+        <strong>NuGet</strong>: <code>nuget-hosted</code>, <code>nuget.org-proxy</code>, <code>nuget-group</code>.
+        <strong>Docker</strong>: <code>docker-hosted</code> (active on connector :5000), <code>docker-hub-proxy</code> + <code>docker-quay-proxy</code> (staged, no connector ports yet — see Configuration).
+      </dd>
       <dt>Auth realms enabled</dt><dd><code>NexusAuthenticatingRealm</code> + <code>DockerToken</code></dd>
+      <dt>CI bots (each cluster)</dt><dd><code>mavenbot</code> (role <code>cicd-maven</code> — push to <code>maven-{snapshots,releases}</code>, read all maven), <code>jenkinsbot</code> (role <code>cicd-docker</code> — push to <code>docker-hosted</code>, read all docker). Same passwords across DC and DR.</dd>
+      <dt>Edge failover</dt><dd>HAProxy <code>nexus-rke2-be</code> + <code>nexus-docker-rke2-be</code>, DC primary + DR backup</dd>
     </dl>
   </section>
 
   <section class="card">
     <h2>What it is</h2>
-    <p>Nexus runs per cluster on Longhorn-backed PVCs. The Docker hosted repo holds internal images (redis-applier already pushed manually; future Open Liberty / NGINX images for the brac-poc-openliberty CI flow land here). A future Docker proxy repo will absorb the slow/unreliable Quay.io and Docker Hub pulls that have hurt DR rollouts.</p>
+    <p>Nexus runs per cluster on Longhorn-backed PVCs. The Docker hosted repo holds internal images (redis-applier already pushed manually; future Open Liberty / NGINX images for the brac-poc-openliberty CI flow land here). The Docker Hub and Quay proxy repos are staged to absorb the slow/unreliable upstream pulls that have hurt DR rollouts — pending the connector-port + ingress wiring described under Configuration.</p>
   </section>
 
   <section class="card">
     <h2>Architecture</h2>
-    <p>Nexus runs per cluster as a single-replica StatefulSet on Longhorn-backed PVCs (data + blob store). Two ingresses per cluster: <code>nexus.apps.sub.comptech-lab.com</code> (UI + REST API on container port 8081) and <code>nexus-docker.apps.sub.comptech-lab.com</code> (Docker registry HTTP connector on container port 5000). The Service exposes both ports; the Docker ingress backends to <code>nexus:5000</code> and the UI ingress to <code>nexus:8081</code>.</p>
-    <p>Edge HAProxy default-backend SNI passthrough routes both hostnames to the local cluster's nginx-ingress (DC by current wildcard match; no DC-primary/DR-backup wired yet — pending Plan-09 explicit <code>nexus-be</code>). DR Nexus is up and equally provisioned but not externally reachable until that backend lands.</p>
+    <p>Nexus runs per cluster as a single-replica StatefulSet on Longhorn-backed PVCs (data + blob store). Two ingresses per cluster: <code>nexus.apps.sub.comptech-lab.com</code> (UI + REST API on container port 8081) and <code>nexus-docker.apps.sub.comptech-lab.com</code> (Docker registry HTTP connector on container port 5000). The Service exposes both ports; the Docker ingress backends to <code>nexus:5000</code> and the UI ingress to <code>nexus:8081</code>. Both ingresses carry <code>nginx.ingress.kubernetes.io/ssl-redirect: false</code> so the edge HAProxy → cluster-ingress :80 hop doesn't get 308'd.</p>
+    <p>Edge HAProxy terminates TLS at <code>vm-tls</code> with the <code>*.apps.sub.comptech-lab.com</code> wildcard cert and forwards plain HTTP to the cluster ingress on :80. Two backends: <code>nexus-rke2-be</code> (UI/REST) and <code>nexus-docker-rke2-be</code> (registry), each with DC primary (<code>30.30.30.2:80</code>) + DR backup (<code>30.30.31.1:80</code>). Health-check paths: <code>GET /service/rest/v1/status</code> (200) and <code>GET /v2/</code> (401 — the auth-required state is the healthy state). <code>timeout server 30m</code> on both backends to handle large image-layer + Maven artefact uploads.</p>
   </section>
 
   <section class="card">
     <h2>Configuration</h2>
-    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/nexus/</code> — Namespace, StatefulSet, Service, Ingress (regular + Docker), Certificate, PVC, plus the legacy <code>nexus-provisioning</code> ConfigMap of Groovy scripts (functionally inert: Nexus 3.74 does not auto-execute scripts mounted at <code>/opt/sonatype/nexus/etc/scripts</code>).</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/nexus/</code> — Namespace, StatefulSet, Service, Ingress (regular + Docker), Certificate, PVC, plus the legacy <code>nexus-provisioning</code> ConfigMap of Groovy scripts (functionally inert: Nexus 3.74 does not auto-execute scripts mounted at <code>/opt/sonatype/nexus/etc/scripts</code>; live config is provisioned via REST).</p>
     <p><strong>Repos created via REST API</strong> (<code>POST /service/rest/v1/repositories/&lt;format&gt;/&lt;type&gt;</code>) on each cluster:</p>
     <ul>
       <li><code>docker-hosted</code> — HTTP connector :5000, <code>v1Enabled: false</code>, <code>forceBasicAuth: true</code>, <code>writePolicy: ALLOW_ONCE</code>. Listens on container port 5000 inside the pod; reachable through the <code>nexus-docker.apps...</code> ingress at <code>/v2/</code>.</li>
+      <li><code>docker-hub-proxy</code> → <code>https://registry-1.docker.io</code>, <code>indexType: HUB</code>. <strong>Staged but not pullable by docker clients yet</strong>: no connector port, and the single docker ingress is owned by <code>docker-hosted</code> on :5000.</li>
+      <li><code>docker-quay-proxy</code> → <code>https://quay.io</code>, <code>indexType: REGISTRY</code>, <code>indexUrl: https://quay.io</code>. Same caveat as the Hub proxy.</li>
       <li>Maven set: <code>maven-releases</code>, <code>maven-snapshots</code>, <code>maven-central</code> (proxy), <code>maven-public</code> (group).</li>
       <li>NuGet set: <code>nuget-hosted</code>, <code>nuget.org-proxy</code>, <code>nuget-group</code>.</li>
     </ul>
-    <p><strong>Still to provision</strong>: <code>docker-proxy</code> (Docker Hub mirror), <code>docker-group</code> aggregating hosted + proxy, optional <code>npm-proxy</code>/<code>helm-hosted</code>.</p>
-    <p>Auth: machine accounts (<code>mavenbot</code>, <code>jenkinsbot</code>) need to be created in Nexus before Jenkins integration — the on-disk <code>~/cloud-init/nexus-{mavenbot,jenkinsbot,admin}-password</code> files are stale from a prior install and do <strong>not</strong> match the live state. The bootstrap admin UUID at <code>/nexus-data/admin.password</code> on the pod is still the active admin credential (wizard never run); rotation is a separate follow-up. OIDC via Keycloak's <code>nexus</code> client is wired in the realm but not yet activated in Nexus.</p>
+    <p><strong>Why no docker-group</strong>: a single-port group with a writable hosted member would let clients use <code>nexus-docker.apps.../&lt;image&gt;</code> for both push and pull-through-cache. Nexus rejected it: <q>Deploying to groups is a PRO-licensed feature.</q> Two ways forward without Pro: (a) accept the proxies-only-for-pull split and add new ingresses + container ports (e.g., <code>:5001</code> hub, <code>:5002</code> quay) so docker clients can target them directly; (b) live without proxies and continue to <code>ctr import</code> for upstream-pull pain. Path (a) is the planned follow-up.</p>
+    <p><strong>CI bot users + roles</strong> (created on both clusters with the same passwords):</p>
+    <ul>
+      <li><code>mavenbot</code> — role <code>cicd-maven</code>: privileges <code>nx-repository-view-maven2-*-{read,browse}</code> + <code>nx-repository-view-maven2-maven-{snapshots,releases}-*</code>. For Jenkins Maven deploy.</li>
+      <li><code>jenkinsbot</code> — role <code>cicd-docker</code>: privileges <code>nx-repository-view-docker-*-{read,browse}</code> + <code>nx-repository-view-docker-docker-hosted-*</code>. For Jenkins <code>docker login</code> + push.</li>
+    </ul>
+    <p>Auth: bootstrap admin UUID at <code>/nexus-data/admin.password</code> on the pod is still the active admin credential (wizard never completed); rotation is a separate deliberate follow-up. OIDC via Keycloak's <code>nexus</code> client is wired in the realm but not yet activated in Nexus.</p>
   </section>
 
   <section class="card">
@@ -143,8 +156,9 @@
     <ul>
       <li><strong>UI</strong>: <code>https://nexus.apps.sub.comptech-lab.com</code></li>
       <li><strong>Docker registry health</strong>: <code>curl -skI https://nexus-docker.apps.sub.comptech-lab.com/v2/</code> — healthy state is <code>HTTP/2 401</code> with <code>WWW-Authenticate: BASIC</code> and <code>Docker-Distribution-Api-Version: registry/2.0</code>. <code>HTTP 502</code> means the connector is down or the docker repo was deleted.</li>
-      <li><strong>Docker login</strong>: <code>docker login nexus-docker.apps.sub.comptech-lab.com</code></li>
+      <li><strong>Docker login (CI)</strong>: <code>docker login nexus-docker.apps.sub.comptech-lab.com -u jenkinsbot</code> using the password from <code>~/cloud-init/nexus-jenkinsbot-password</code>.</li>
       <li><strong>Push image</strong>: <code>docker tag &lt;src&gt; nexus-docker.apps.sub.comptech-lab.com/&lt;name&gt;:&lt;tag&gt; && docker push nexus-docker.apps.sub.comptech-lab.com/&lt;name&gt;:&lt;tag&gt;</code></li>
+      <li><strong>Maven deploy (CI)</strong>: <code>mvn deploy -DaltDeploymentRepository=snapshots::default::https://nexus.apps.sub.comptech-lab.com/repository/maven-snapshots/</code> with <code>~/.m2/settings.xml</code> &lt;server&gt; <code>id=snapshots, username=mavenbot, password=&lt;…&gt;</code>.</li>
       <li><strong>List repos via REST</strong>: <code>curl -sk -u admin:&lt;pw&gt; https://nexus.apps.sub.comptech-lab.com/service/rest/v1/repositories</code></li>
       <li><strong>Re-create the docker-hosted repo</strong> (if ever lost): <code>POST /service/rest/v1/repositories/docker/hosted</code> with body <code>{name, online, storage{blobStoreName, strictContentTypeValidation, writePolicy}, docker{v1Enabled:false, forceBasicAuth:true, httpPort:5000}}</code>. Restart not required — the connector binds immediately.</li>
       <li><strong>Backups</strong>: planned MinIO bucket <code>nexus-blobs</code> (CronJob not yet created — STATE.md TODO).</li>
@@ -153,8 +167,8 @@
 
   <section class="card">
     <h2>Failover</h2>
-    <p>Independent per cluster. Each cluster has its own Nexus with its own data; pushed images on DC are NOT automatically on DR. Building once and pushing to both clusters' Nexuses is the current pattern (or use ctr import to bypass the registry entirely, as we did for Terrakube + AWX images on DR).</p>
-    <p>No DC-primary/DR-backup edge backend wired yet — both DC and DR Nexus instances now have <code>docker-hosted</code> on connector :5000, but <code>nexus-docker.apps...</code> only reaches DC via the edge HAProxy default SNI fall-through. Plan-09 will add an explicit <code>nexus-rke2-be</code> with DC primary + DR backup, mirroring the pattern used for Vault, Keycloak, Terrakube, AWX.</p>
+    <p><strong>Service availability</strong>: edge HAProxy <code>nexus-rke2-be</code> and <code>nexus-docker-rke2-be</code> with DC primary + DR backup. When DC ingress goes unhealthy, the same FQDNs (<code>nexus.apps...</code> and <code>nexus-docker.apps...</code>) silently switch to DR. Both clusters are independently provisioned with the same repos, same realms, and the same <code>mavenbot</code>/<code>jenkinsbot</code> passwords — so a Jenkins credential authored once works against either side post-failover. Verified 2026-05-06 with admin-socket DISABLE on the DC servers: cutover transparent, <code>jenkinsbot</code> auth + <code>/v2/</code> 200 served by DR, <code>/service/rest/v1/status</code> 200 throughout; re-enable returned both backends to UP within seconds.</p>
+    <p><strong>Data continuity</strong>: <em>not</em> automated. Pushed Maven artefacts and Docker images on DC are not replicated to DR. The placeholder <code>nexus-sync-from-dc</code> CronJob in the DR namespace currently does nothing. The intended pattern is build-once + push-to-both, or <code>ctr import</code> to bypass the registry. Replicating Nexus blob storage cross-cluster is a future Phase R-G concern.</p>
   </section>
 
   <section class="card">
