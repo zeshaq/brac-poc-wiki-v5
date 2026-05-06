@@ -4,79 +4,69 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BRAC POC — DC/DR tools catalogue</title>
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 <a href="#main" class="skip">Skip to content</a>
 
 <aside class="sidebar" aria-label="Site navigation">
-  <div class="brand">
-    <div class="brand-mark">B</div>
-    <div>
-      <div class="brand-title">BRAC POC</div>
-      <div class="brand-sub">DC / DR tools</div>
-    </div>
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
   </div>
-
-  <nav class="nav">
-    <div class="nav-group">
-      <div class="nav-heading">Catalogue</div>
-      <a href="#overview">Overview</a>
-      <a href="#topology">Topology</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-heading">Foundation</div>
-      <a href="#argocd">Argo CD</a>
-      <a href="#cert-manager">cert-manager</a>
-      <a href="#longhorn">Longhorn</a>
-      <a href="#webhook-pdns">webhook-pdns</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-heading">Identity &amp; secrets</div>
-      <a href="#keycloak">Keycloak</a>
-      <a href="#vault">HashiCorp Vault</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-heading">Data &amp; streaming</div>
-      <a href="#strimzi">Strimzi operator</a>
-      <a href="#kafka">Apache Kafka (KRaft)</a>
-      <a href="#mm2">MirrorMaker 2</a>
-      <a href="#redis-operator">Redis operator</a>
-      <a href="#redis">Redis (RedisFailover)</a>
-      <a href="#redis-applier">redis-applier</a>
-      <a href="#redisinsight">RedisInsight</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-heading">CI / CD &amp; IaC</div>
-      <a href="#nexus">Sonatype Nexus 3</a>
-      <a href="#jenkins">Jenkins</a>
-      <a href="#awx">Ansible AWX</a>
-      <a href="#terrakube">Terrakube</a>
-      <a href="#gitlab">GitLab</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-heading">Observability</div>
-      <a href="#signoz">SigNoz</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-heading">Edge / network</div>
-      <a href="#haproxy">HAProxy (edge)</a>
-      <a href="#pdns">PowerDNS</a>
-      <a href="#minio">MinIO</a>
-    </div>
-  </nav>
-
-  <div class="footer-note">v5 · live snapshot</div>
+</div>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/" class="active" aria-current="page">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity & secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Data & streaming</div>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/kafka.html">Apache Kafka (KRaft)</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis.html">Redis (RedisFailover)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD & IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network & shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="footer-note">v5 · live snapshot</div>
 </aside>
 
 <main id="main" class="content">
-
   <header class="page-header">
     <div class="kicker">BRAC POC</div>
     <h1>Tools deployed across DC and DR</h1>
@@ -84,7 +74,7 @@
       Single KVM host (<code>dl385</code>) running two RKE2 clusters
       (<code>rke2</code> = DC, <code>rke2-dr</code> = DR) plus a small set of
       shared infrastructure VMs on the <code>br30</code> app subnet.
-      Every catalogued component below is deployed in <strong>both</strong>
+      Every catalogued component is deployed in <strong>both</strong>
       DC and DR unless explicitly noted as DR-only or shared infra.
     </p>
     <div class="legend">
@@ -110,12 +100,12 @@
         <tr><th>Layer</th><th>Components</th></tr>
       </thead>
       <tbody>
-        <tr><td>Foundation</td><td>Argo CD, cert-manager, Longhorn, webhook-pdns</td></tr>
-        <tr><td>Identity &amp; secrets</td><td>Keycloak, Vault</td></tr>
-        <tr><td>Data &amp; streaming</td><td>Strimzi, Kafka KRaft, MirrorMaker 2, Redis operator, Redis, redis-applier, RedisInsight</td></tr>
-        <tr><td>CI / CD &amp; IaC</td><td>Nexus 3, Jenkins, AWX, Terrakube, GitLab</td></tr>
-        <tr><td>Observability</td><td>SigNoz</td></tr>
-        <tr><td>Edge / network</td><td>HAProxy, PowerDNS, MinIO</td></tr>
+      <tr><td>Foundation</td><td><a href="/tools/argocd.html">Argo CD</a>, <a href="/tools/cert-manager.html">cert-manager</a>, <a href="/tools/longhorn.html">Longhorn</a>, <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a></td></tr>
+      <tr><td>Identity & secrets</td><td><a href="/tools/keycloak.html">Keycloak</a>, <a href="/tools/vault.html">HashiCorp Vault</a></td></tr>
+      <tr><td>Data & streaming</td><td><a href="/tools/strimzi.html">Strimzi operator</a>, <a href="/tools/kafka.html">Apache Kafka (KRaft)</a>, <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>, <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>, <a href="/tools/redis.html">Redis (RedisFailover)</a>, <a href="/tools/redis-applier.html">redis-applier</a>, <a href="/tools/redisinsight.html">RedisInsight</a></td></tr>
+      <tr><td>CI / CD & IaC</td><td><a href="/tools/nexus.html">Sonatype Nexus 3</a>, <a href="/tools/jenkins.html">Jenkins</a>, <a href="/tools/awx.html">Ansible AWX</a>, <a href="/tools/terrakube.html">Terrakube</a>, <a href="/tools/gitlab.html">GitLab</a></td></tr>
+      <tr><td>Observability</td><td><a href="/tools/signoz.html">SigNoz</a></td></tr>
+      <tr><td>Edge / network & shared</td><td><a href="/tools/haproxy.html">HAProxy (edge)</a>, <a href="/tools/pdns.html">PowerDNS</a>, <a href="/tools/minio.html">MinIO</a></td></tr>
       </tbody>
     </table>
   </section>
@@ -123,284 +113,225 @@
   <section id="topology" class="card">
     <h2>Topology</h2>
     <ul>
-      <li><strong>DC cluster</strong> — RKE2 on three VMs (<code>rke2-1/2/3</code>).</li>
-      <li><strong>DR cluster</strong> — RKE2 on three VMs (<code>rke2-dr-1/2/3</code>).</li>
-      <li><strong>Shared infra VMs</strong> on <code>br30</code> — HAProxy (edge), PowerDNS (auth DNS), GitLab, MinIO.</li>
-      <li><strong>Edge ingress</strong> — HAProxy with <code>backup</code> backends; DC primary, DR backup. Failover proven for Vault, Keycloak, Terrakube, AWX.</li>
-      <li><strong>GitOps source of truth</strong> — <code>infra/gitops-rke2</code> on the lab GitLab; Argo CD in each cluster reconciles its own scope.</li>
+      <li><strong>DC cluster</strong> &mdash; RKE2 on three VMs (<code>rke2-1/2/3</code>).</li>
+      <li><strong>DR cluster</strong> &mdash; RKE2 on three VMs (<code>rke2-dr-1/2/3</code>).</li>
+      <li><strong>Shared infra VMs</strong> on <code>br30</code> &mdash; HAProxy (edge), PowerDNS (auth DNS), GitLab, MinIO.</li>
+      <li><strong>Edge ingress</strong> &mdash; HAProxy with <code>backup</code> backends; DC primary, DR backup. Failover proven for Vault, Keycloak, Terrakube, AWX.</li>
+      <li><strong>GitOps source of truth</strong> &mdash; <code>infra/gitops-rke2</code> on the lab GitLab; Argo CD in each cluster reconciles its own scope.</li>
     </ul>
   </section>
 
   <h2 class="section-rule">Foundation</h2>
-
-  <section id="argocd" class="card">
-    <div class="card-head">
-      <h3>Argo CD</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>GitOps controller per cluster. Reconciles <code>clusters/dc/apps/</code> on DC and <code>clusters/dr/apps/</code> on DR from the <code>infra/gitops-rke2</code> repo. Root-app glob fans out per-app Applications.</p>
-    <dl class="meta">
-      <dt>Role</dt><dd>Continuous delivery / drift detection</dd>
-      <dt>Pattern</dt><dd>App-of-apps with shared <code>helm-values/</code> + per-cluster overlays</dd>
-    </dl>
-  </section>
-
-  <section id="cert-manager" class="card">
-    <div class="card-head">
-      <h3>cert-manager</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Issues TLS certificates for in-cluster Ingresses and internal services. ClusterIssuers shipped from <code>shared/cluster-issuers/</code>.</p>
-    <dl class="meta">
-      <dt>Role</dt><dd>Certificate lifecycle</dd>
-    </dl>
-  </section>
-
-  <section id="longhorn" class="card">
-    <div class="card-head">
-      <h3>Longhorn</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Distributed block storage for stateful workloads (Vault, Kafka, Redis, Postgres, MinIO buckets sourced via PVC). Provides the default storage class on each cluster.</p>
-    <dl class="meta">
-      <dt>Role</dt><dd>Persistent volumes for stateful sets</dd>
-    </dl>
-  </section>
-
-  <section id="webhook-pdns" class="card">
-    <div class="card-head">
-      <h3>webhook-pdns (cert-manager)</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>cert-manager DNS-01 webhook that talks to the lab PowerDNS, allowing certificate issuance against <code>*.apps.sub.comptech-lab.com</code> records.</p>
-    <dl class="meta">
-      <dt>Role</dt><dd>DNS-01 ACME solver</dd>
-    </dl>
-  </section>
-
-  <h2 class="section-rule">Identity &amp; secrets</h2>
-
-  <section id="keycloak" class="card">
-    <div class="card-head">
-      <h3>Keycloak</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>codecentric/keycloakx 7.0.0 chart, Keycloak 26.3.5, single replica per cluster, Postgres StatefulSet, <code>comptech</code> realm pre-imported. Issuer <code>https://auth.apps.sub.comptech-lab.com/realms/comptech</code>. Central OIDC IdP for the platform — Vault, Argo CD, AWX, Terrakube, GitLab, Jenkins, Nexus all federate here.</p>
-    <dl class="meta">
-      <dt>Chart / version</dt><dd>codecentric/keycloakx 7.0.0 · Keycloak 26.3.5</dd>
-      <dt>Hostname</dt><dd><code>auth.apps.sub.comptech-lab.com</code></dd>
-      <dt>Failover</dt><dd>DC&rarr;DR ~13s, DR&rarr;DC ~18s (HAProxy backup)</dd>
-    </dl>
-  </section>
-
-  <section id="vault" class="card">
-    <div class="card-head">
-      <h3>HashiCorp Vault</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Helm 0.31.0, Vault 1.18.2, Raft-3 cluster per side, transit auto-unseal against a small bootstrap Vault on a dedicated VM. Initialised and unsealed in both clusters.</p>
-    <dl class="meta">
-      <dt>Mode</dt><dd>Raft, transit auto-unseal</dd>
-      <dt>Hostname</dt><dd><code>vault-rke2.apps.sub.comptech-lab.com</code></dd>
-      <dt>Failover</dt><dd>DC&rarr;DR ~9s (HAProxy backup)</dd>
-    </dl>
-  </section>
-
-  <h2 class="section-rule">Data &amp; streaming</h2>
-
-  <section id="strimzi" class="card">
-    <div class="card-head">
-      <h3>Strimzi operator</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Strimzi 0.46.1 watching the <code>kafka</code> namespace. Manages the KRaft Kafka cluster, topics, KafkaUsers, and MirrorMaker 2 on DR.</p>
-    <dl class="meta">
-      <dt>Version</dt><dd>0.46.1</dd>
-    </dl>
-  </section>
-
-  <section id="kafka" class="card">
-    <div class="card-head">
-      <h3>Apache Kafka (KRaft)</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>3 brokers + 3 controllers in KRaft mode per cluster. Internal listener <code>scram</code> on 9095 (TLS + SCRAM-SHA-512) for in-cluster clients; <code>redis-writes</code> topic carries the Redis WAL pattern (ADR-0018).</p>
-    <dl class="meta">
-      <dt>Topology</dt><dd>3 brokers + 3 controllers, KRaft</dd>
-      <dt>AuthN/Z</dt><dd>SCRAM-SHA-512 + simple authz; ANONYMOUS superuser on DR for MM2</dd>
-    </dl>
-  </section>
-
-  <section id="mm2" class="card">
-    <div class="card-head">
-      <h3>MirrorMaker 2</h3>
-      <div class="badges"><span class="badge dr-only">DR-only</span></div>
-    </div>
-    <p>Strimzi-managed Connect cluster (2 pods) replicating from DC Kafka into DR Kafka. Underpins the cross-cluster Redis WAL pattern.</p>
-    <dl class="meta">
-      <dt>Topology</dt><dd>2 pods, 1/1 Ready</dd>
-      <dt>Direction</dt><dd>DC &rarr; DR</dd>
-    </dl>
-  </section>
-
-  <section id="redis-operator" class="card">
-    <div class="card-head">
-      <h3>Redis operator (Spotahome)</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Spotahome <code>redis-operator</code> 3.2.13 reconciling RedisFailover CRs.</p>
-    <dl class="meta">
-      <dt>Version</dt><dd>3.2.13</dd>
-    </dl>
-  </section>
-
-  <section id="redis" class="card">
-    <div class="card-head">
-      <h3>Redis (RedisFailover)</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>3 Redis + 3 Sentinel pods per cluster managed by RedisFailover. Receives writes via the redis-applier consumer for cross-cluster state.</p>
-    <dl class="meta">
-      <dt>Topology</dt><dd>3 redis + 3 sentinel</dd>
-    </dl>
-  </section>
-
-  <section id="redis-applier" class="card">
-    <div class="card-head">
-      <h3>redis-applier</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Custom Go consumer (v0.1.1, 16.9 MB distroless) that reads <code>redis-writes</code> from local Kafka and applies into the local Redis primary. Enables the Kafka WAL replication pattern (ADR-0018) without coupling Redis directly across sites. End-to-end DR test passed 2026-05-05.</p>
-    <dl class="meta">
-      <dt>Image</dt><dd><code>nexus.apps.sub.comptech-lab.com/redis-applier:0.1.1</code></dd>
-      <dt>Pattern</dt><dd>Kafka WAL &rarr; Redis (ADR-0018)</dd>
-      <dt>Replicas</dt><dd>3/3 Ready in each cluster</dd>
-    </dl>
-  </section>
-
-  <section id="redisinsight" class="card">
-    <div class="card-head">
-      <h3>RedisInsight</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Redis admin UI, raw manifests. Exposed via edge HAProxy; failover smoke test passed.</p>
-  </section>
-
-  <h2 class="section-rule">CI / CD &amp; IaC</h2>
-
-  <section id="nexus" class="card">
-    <div class="card-head">
-      <h3>Sonatype Nexus 3</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Artifact and container registry for the lab. Hosts the redis-applier Docker image and (planned) Docker / Maven / npm / Helm proxy repos.</p>
-    <dl class="meta">
-      <dt>Hostname</dt><dd><code>nexus.apps.sub.comptech-lab.com</code></dd>
-    </dl>
-  </section>
-
-  <section id="jenkins" class="card">
-    <div class="card-head">
-      <h3>Jenkins</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Jenkins LTS controller per cluster. Custom plugin-baked image is on the roadmap; current deployment uses the default LTS image.</p>
-  </section>
-
-  <section id="awx" class="card">
-    <div class="card-head">
-      <h3>Ansible AWX</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>awx-operator 3.2.1, AWX 24.6.1, operator-managed Postgres-15-c9s per cluster. OIDC against Keycloak via <code>SOCIAL_AUTH_OIDC_*</code>.</p>
-    <dl class="meta">
-      <dt>Hostname</dt><dd><code>awx.apps.sub.comptech-lab.com</code></dd>
-      <dt>Failover</dt><dd>DC&rarr;DR ~14s, DR&rarr;DC ~42s</dd>
-    </dl>
-  </section>
-
-  <section id="terrakube" class="card">
-    <div class="card-head">
-      <h3>Terrakube</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>Self-hosted Terraform/OpenTofu collaboration platform. Chart 4.6.2, appVersion 2.30.1 — api + ui + executor + registry. Per-cluster Postgres &amp; Redis StatefulSets; remote state in MinIO bucket <code>terrakube-state</code>; OIDC via Keycloak public client with PKCE.</p>
-    <dl class="meta">
-      <dt>Hostnames</dt><dd><code>terrakube-{ui,api,reg}.apps.sub.comptech-lab.com</code></dd>
-      <dt>Failover</dt><dd>DC&rarr;DR ~16s, DR&rarr;DC ~65s (Spring Boot cold start)</dd>
-    </dl>
-  </section>
-
-  <section id="gitlab" class="card">
-    <div class="card-head">
-      <h3>GitLab</h3>
-      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
-    </div>
-    <p>Self-managed GitLab on a dedicated VM. Hosts the lab's GitOps repos (<code>infra/gitops-rke2</code>, BRAC POC docs / wiki) and CI for them. Single-instance — not part of the DC/DR pair.</p>
-  </section>
-
+  <div class="tool-grid">
+    <a class="tool-tile" href="/tools/argocd.html">
+      <div class="tile-head">
+        <h3>Argo CD</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>GitOps controller per cluster — reconciles the live state of DC and DR from a single Git repo.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/cert-manager.html">
+      <div class="tile-head">
+        <h3>cert-manager</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>TLS certificate lifecycle for in-cluster Ingresses and internal services.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/longhorn.html">
+      <div class="tile-head">
+        <h3>Longhorn</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Distributed block storage — the default StorageClass for every stateful workload in the platform.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/webhook-pdns.html">
+      <div class="tile-head">
+        <h3>webhook-pdns (cert-manager)</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>cert-manager DNS-01 ACME solver that talks to the lab PowerDNS over the API.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+  </div>
+  <h2 class="section-rule">Identity & secrets</h2>
+  <div class="tool-grid">
+    <a class="tool-tile" href="/tools/keycloak.html">
+      <div class="tile-head">
+        <h3>Keycloak</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Central OIDC identity provider for the platform — Vault, Argo CD, AWX, Terrakube, GitLab, Jenkins, Nexus all federate here.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/vault.html">
+      <div class="tile-head">
+        <h3>HashiCorp Vault</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Secrets store per cluster — Raft-3, transit auto-unseal, initialised and unsealed.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+  </div>
+  <h2 class="section-rule">Data & streaming</h2>
+  <div class="tool-grid">
+    <a class="tool-tile" href="/tools/strimzi.html">
+      <div class="tile-head">
+        <h3>Strimzi operator</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Kafka operator — manages KRaft Kafka, KafkaUsers, topics, and (on DR) MirrorMaker 2.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/kafka.html">
+      <div class="tile-head">
+        <h3>Apache Kafka (KRaft)</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>3 brokers + 3 controllers in KRaft mode per cluster — backbone of the cross-cluster replication path.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/mirrormaker2.html">
+      <div class="tile-head">
+        <h3>MirrorMaker 2</h3>
+        <div class="badges"><span class="badge dr-only">DR-only</span></div>
+      </div>
+      <p>Cross-cluster Kafka replication — runs on DR, pulls from DC.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/redis-operator.html">
+      <div class="tile-head">
+        <h3>Redis operator (Spotahome)</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Reconciles RedisFailover CRs — Sentinel-managed Redis primaries with replica failover.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/redis.html">
+      <div class="tile-head">
+        <h3>Redis (RedisFailover)</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>3 Redis + 3 Sentinel pods per cluster — the platform's KV store, fed by the Kafka WAL.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/redis-applier.html">
+      <div class="tile-head">
+        <h3>redis-applier</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Custom Go consumer that reads <code>redis-writes</code> from local Kafka and applies into local Redis.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/redisinsight.html">
+      <div class="tile-head">
+        <h3>RedisInsight</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Redis admin UI — raw manifests, exposed via the edge HAProxy.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+  </div>
+  <h2 class="section-rule">CI / CD & IaC</h2>
+  <div class="tool-grid">
+    <a class="tool-tile" href="/tools/nexus.html">
+      <div class="tile-head">
+        <h3>Sonatype Nexus 3</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Artifact and container registry for the lab — hosts <code>redis-applier</code>, will mirror Quay/Docker Hub.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/jenkins.html">
+      <div class="tile-head">
+        <h3>Jenkins</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Per-cluster Jenkins LTS controller — pipeline runner for the platform.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/awx.html">
+      <div class="tile-head">
+        <h3>Ansible AWX</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Ansible automation platform — operator-managed, OIDC against Keycloak.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/terrakube.html">
+      <div class="tile-head">
+        <h3>Terrakube</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>Self-hosted Terraform / OpenTofu collaboration platform — UI, API, executor, registry; OIDC via Keycloak.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/gitlab.html">
+      <div class="tile-head">
+        <h3>GitLab</h3>
+        <div class="badges"><span class="badge shared">Shared infra</span></div>
+      </div>
+      <p>Self-managed GitLab on a dedicated VM — hosts the GitOps repo and POC docs.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+  </div>
   <h2 class="section-rule">Observability</h2>
-
-  <section id="signoz" class="card">
-    <div class="card-head">
-      <h3>SigNoz</h3>
-      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    </div>
-    <p>OpenTelemetry-native APM. No-ZooKeeper, single-node ClickHouse profile per cluster. Functional; cosmetic OOS in Argo CD pending an <code>ignoreDifferences</code> rule.</p>
-  </section>
-
-  <h2 class="section-rule">Edge / network &amp; shared</h2>
-
-  <section id="haproxy" class="card">
-    <div class="card-head">
-      <h3>HAProxy (edge)</h3>
-      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
-    </div>
-    <p>L7 ingress for the entire lab. <code>*.apps.sub.comptech-lab.com</code> resolves to HAProxy, which fans out to the DC and DR cluster ingress controllers. DC/DR failover is implemented here using <code>backup</code> backends — DC primary, DR backup, no DNS movement.</p>
-    <dl class="meta">
-      <dt>Failover model</dt><dd>HAProxy <code>backup</code> keyword per backend</dd>
-      <dt>Wired backends</dt><dd>vault-rke2, auth (Keycloak), terrakube-{ui,api,reg}, awx</dd>
-    </dl>
-  </section>
-
-  <section id="pdns" class="card">
-    <div class="card-head">
-      <h3>PowerDNS</h3>
-      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
-    </div>
-    <p>Authoritative DNS for the lab zone <code>sub.comptech-lab.com</code>. Drives ACME DNS-01 challenges through cert-manager's webhook-pdns.</p>
-  </section>
-
-  <section id="minio" class="card">
-    <div class="card-head">
-      <h3>MinIO</h3>
-      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
-    </div>
-    <p>S3-compatible object storage on a dedicated VM. Buckets back Terrakube remote state (<code>terrakube-state</code>) and (planned) Vault snapshots, Jenkins backups, Nexus blobs.</p>
-  </section>
+  <div class="tool-grid">
+    <a class="tool-tile" href="/tools/signoz.html">
+      <div class="tile-head">
+        <h3>SigNoz</h3>
+        <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+      </div>
+      <p>OpenTelemetry-native APM — no-ZooKeeper, single-node ClickHouse profile per cluster.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+  </div>
+  <h2 class="section-rule">Edge / network & shared</h2>
+  <div class="tool-grid">
+    <a class="tool-tile" href="/tools/haproxy.html">
+      <div class="tile-head">
+        <h3>HAProxy (edge)</h3>
+        <div class="badges"><span class="badge shared">Shared infra</span></div>
+      </div>
+      <p>L7 edge ingress for the lab — implements DC/DR failover via <code>backup</code> backends.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/pdns.html">
+      <div class="tile-head">
+        <h3>PowerDNS</h3>
+        <div class="badges"><span class="badge shared">Shared infra</span></div>
+      </div>
+      <p>Authoritative DNS for the lab zone — drives ACME DNS-01 challenges through cert-manager.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+    <a class="tool-tile" href="/tools/minio.html">
+      <div class="tile-head">
+        <h3>MinIO</h3>
+        <div class="badges"><span class="badge shared">Shared infra</span></div>
+      </div>
+      <p>S3-compatible object storage — backs Terrakube remote state and (planned) snapshot buckets.</p>
+      <span class="tile-link">Open page →</span>
+    </a>
+  </div>
 
   <footer class="page-footer">
     <p>Generated from the live RKE2 DC/DR snapshot. Last updated 2026-05-06.</p>
-    <p>Cluster failover smoke tests proven for Vault, Keycloak, Terrakube, AWX. See per-card cards for measured cutover times.</p>
+    <p>Cluster failover smoke tests proven for Vault, Keycloak, Terrakube, AWX. Per-tool details live on each tool's page.</p>
   </footer>
 
 </main>
 
 <script>
-  // highlight current section in sidebar on scroll
-  const links = document.querySelectorAll('.nav a');
-  const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
-  const byId = new Map(sections.map(s => [s.id, document.querySelector('.nav a[href="#' + s.id + '"]')]));
-  const obs = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        links.forEach(l => l.classList.remove('active'));
-        const a = byId.get(e.target.id);
-        if (a) a.classList.add('active');
-      }
-    });
-  }, { rootMargin: '-30% 0px -65% 0px' });
-  sections.forEach(s => obs.observe(s));
+  // Fall-back active state if the static class wasn't pre-rendered.
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
 </script>
 </body>
 </html>

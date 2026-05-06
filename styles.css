@@ -297,6 +297,137 @@ li { margin: 0.25rem 0; }
   font-size: 13px;
 }
 
+/* breadcrumb */
+.breadcrumb {
+  font-size: 13px;
+  color: var(--text-mute);
+  margin: 0 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.breadcrumb a {
+  color: var(--text-dim);
+}
+.breadcrumb a:hover {
+  color: var(--text);
+}
+.breadcrumb .sep {
+  color: var(--text-mute);
+  opacity: 0.6;
+}
+.breadcrumb .current {
+  color: var(--text);
+}
+
+/* page header on tool pages */
+.page-header .badges {
+  margin-top: 0.5rem;
+}
+
+/* meta grid (used on tool pages for richer Quick facts) */
+dl.meta-grid {
+  border-top: none;
+  padding-top: 0;
+  grid-template-columns: 200px 1fr;
+  gap: 0.4rem 1rem;
+}
+
+/* placeholder cards (dimmer; reader knows it's awaiting content) */
+.card.placeholder {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent), var(--bg-card);
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+.card.placeholder p,
+.card.placeholder ul,
+.card.placeholder li {
+  color: var(--text-mute);
+}
+.card .muted {
+  color: var(--text-mute);
+}
+
+/* tool tile grid on the landing page */
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 1.5rem;
+}
+.tool-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: var(--shadow);
+}
+.tool-tile:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.tool-tile h3 {
+  font-size: 16px;
+  margin: 0;
+}
+.tool-tile p {
+  color: var(--text-dim);
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.tool-tile .tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.tool-tile .tile-link {
+  color: var(--accent);
+  font-size: 12.5px;
+  margin-top: 0.25rem;
+}
+
+/* prev/next page nav at the bottom of each tool page */
+.page-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 2rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.page-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  max-width: 48%;
+}
+.page-nav a:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  text-decoration: none;
+}
+.page-nav .next {
+  margin-left: auto;
+  text-align: right;
+}
+
 @media (max-width: 900px) {
   :root { --sidebar-w: 240px; }
   .content { padding: 1.75rem 1.5rem 3rem; }

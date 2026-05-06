@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ansible AWX — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
+  </div>
+</div>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity & secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Data & streaming</div>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/kafka.html">Apache Kafka (KRaft)</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis.html">Redis (RedisFailover)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD & IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html" class="active" aria-current="page">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network & shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="footer-note">v5 · live snapshot</div>
+</aside>
+
+<main id="main" class="content">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Catalogue</a> <span class="sep">/</span>
+    <span>CI / CD & IaC</span> <span class="sep">/</span>
+    <span class="current">Ansible AWX</span>
+  </nav>
+
+  <header class="page-header">
+    <div class="kicker">CI / CD & IaC</div>
+    <h1>Ansible AWX</h1>
+    <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    <p class="lede">Ansible automation platform — operator-managed, OIDC against Keycloak.</p>
+  </header>
+
+  <section class="card">
+    <h2>Quick facts</h2>
+    <dl class="meta meta-grid">
+      <dt>awx-operator</dt><dd>3.2.1</dd>
+      <dt>AWX version</dt><dd>24.6.1</dd>
+      <dt>Database</dt><dd>Operator-managed Postgres 15 (c9s)</dd>
+      <dt>OIDC</dt><dd><code>SOCIAL_AUTH_OIDC_*</code> against Keycloak</dd>
+      <dt>Hostname</dt><dd><code>awx.apps.sub.comptech-lab.com</code></dd>
+      <dt>Failover (DC→DR)</dt><dd>~14 s</dd>
+      <dt>Failover (DR→DC)</dt><dd>~42 s</dd>
+      <dt>Healthcheck</dt><dd><code>GET /</code> (200 / 30x — 302 → /login/ at steady state)</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p>One AWX instance per cluster, fronted by the edge HAProxy with DC primary + DR backup. Container images (<code>awx</code>, <code>awx-ee</code>, <code>awx-operator</code>) are <code>ctr</code>-imported on DR (and rke2-3) to avoid slow Quay.io pulls.</p>
+  </section>
+
+  <section class="card placeholder">
+    <h2>Architecture</h2>
+    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+  </section>
+
+  <section class="card placeholder">
+    <h2>Configuration</h2>
+    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+  </section>
+
+  <section class="card placeholder">
+    <h2>Operations</h2>
+    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+  </section>
+
+  <section class="card placeholder">
+    <h2>Failover</h2>
+    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+  </section>
+
+  <section class="card placeholder">
+    <h2>References</h2>
+    <ul class="muted">
+      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    </ul>
+  </section>
+
+  <nav class="page-nav" aria-label="Adjacent tools">
+    <a class="prev" href="/tools/jenkins.html" rel="prev">← Jenkins</a>
+    <a class="next" href="/tools/terrakube.html" rel="next">Terrakube →</a>
+  </nav>
+
+</main>
+
+<script>
+  // Fall-back active state if the static class wasn't pre-rendered.
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
+</script>
+</body>
+</html>
