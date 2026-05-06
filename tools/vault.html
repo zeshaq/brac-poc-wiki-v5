@@ -98,7 +98,7 @@
     <div class="kicker">Identity & secrets</div>
     <h1>HashiCorp Vault</h1>
     <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    <p class="lede">Secrets store per cluster — Raft-3, transit auto-unseal, initialised and unsealed.</p>
+    <p class="lede">Secrets store per cluster — Raft-3, Shamir-sealed (since 2026-05-06), DC→DR sync via logical export through MinIO.</p>
   </header>
 
   <section class="card">
@@ -106,42 +106,86 @@
     <dl class="meta meta-grid">
       <dt>Chart</dt><dd>hashicorp/vault 0.31.0</dd>
       <dt>Version</dt><dd>Vault 1.18.2</dd>
-      <dt>Mode</dt><dd>Raft, 3 replicas, transit auto-unseal</dd>
-      <dt>Hostname</dt><dd><code>vault-rke2.apps.sub.comptech-lab.com</code></dd>
-      <dt>Failover (DC→DR)</dt><dd>~9 s</dd>
-      <dt>Init artefacts</dt><dd><code>~/cloud-init/vault-rke2-{dc,dr}-init.json</code> (chmod 600)</dd>
+      <dt>Mode</dt><dd>Raft HA, 3 replicas per cluster, <strong>Shamir seal</strong> (5 shares, 3 threshold)</dd>
+      <dt>Hostname</dt><dd><code>vault-rke2.apps.sub.comptech-lab.com</code> (HAProxy DC primary + DR backup)</dd>
+      <dt>Failover (DC→DR)</dt><dd>~9 s (edge HAProxy, smoke-tested 2026-05-04)</dd>
+      <dt>Init artefacts</dt><dd><code>~/cloud-init/vault-rke2-{dc,dr}-init-shamir.json</code> (chmod 600)</dd>
+      <dt>Cross-cluster sync</dt><dd>logical replication: hourly export DC → MinIO bucket <code>vault-snapshots-logical/</code> → 4-hourly import into DR</dd>
     </dl>
   </section>
 
   <section class="card">
     <h2>What it is</h2>
-    <p>Each cluster runs an independent 3-node Vault Raft cluster. Auto-unseal targets the small bootstrap Vault on a dedicated VM that holds the transit key; the bootstrap Vault's Shamir keys live at <code>~/cloud-init/vault-seed-init.txt</code> and are the critical recovery artefact — without them, a Vault pod restart in either cluster comes up sealed.</p>
+    <p>Each cluster runs an independent 3-node Vault Raft cluster sealed with Shamir's Secret Sharing (operators hold 5 unseal-key shares per cluster; any 3 unseal a pod). After any pod restart — rolling helm upgrade, node reboot, eviction — the operator must feed 3 shares to each pod via <code>vault operator unseal</code>.</p>
+    <p>The 2026-05-05 transit auto-unseal target (<code>vault-seed</code> VM) was decommissioned; both clusters were re-initialised on Shamir 2026-05-06 (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/39">MR !39</a>). Vault was empty pre-migration so no data was lost.</p>
+    <p>Cross-cluster DC→DR sync is no longer Raft-snapshot ship (per-cluster Shamir keyrings can't decrypt each other's master keys). Instead, a logical replicator (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/40">MR !40</a>) runs as CronJobs in each cluster's <code>vault</code> namespace, exporting policies / auth methods / secret mounts / KV-v2 data through MinIO.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <pre class="ascii-art">
+DC cluster                      MinIO                      DR cluster
+──────────                      ─────                      ──────────
+vault-{0,1,2}                                              vault-{0,1,2}
+  ├─ Raft HA                                                 ├─ Raft HA
+  └─ Shamir seal                                             └─ Shamir seal
+        │                                                          │
+  CronJob/vault-replicator-export                                  │
+    schedule: 0 * * * *                                            │
+    runs `vault export` ──tarball──▶ vault-snapshots-logical/      │
+                                       dc/&lt;ts&gt;.tar.gz              │
+                                       dc/latest.tar.gz            │
+                                                                   │
+                                              vault-snapshots-logical/dc/latest
+                                                       ──tarball──▶
+                                                                   │
+                                                  CronJob/vault-replicator-import
+                                                  schedule: 15 */4 * * *
+                                                  replays into DR vault</pre>
+    <p>Per-cluster keys stay on disk on the operator host (<code>~/cloud-init/vault-rke2-{dc,dr}-init-shamir.json</code>, chmod 600). Edge HAProxy <code>vault-rke2-be</code> backend has DC primary + DR backup; failover happens at the L7 health-check layer (<code>/v1/sys/health?standbyok=true&drsecondaryok=true</code>) within ~9 s on DC pod scale-down.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source of truth: <a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/shared/helm-values"><code>shared/helm-values/vault.yaml</code></a> (chart-level) and per-cluster overlays at <code>clusters/{dc,dr}/values/vault.yaml</code>.</p>
+    <p>Replication tooling lives at <code>clusters/{dc,dr}/manifests/vault-replication/</code> (script ConfigMap + ServiceAccount + CronJob); the <code>vault-replicator</code> Secret with VAULT_TOKEN + MinIO creds is applied imperatively (out of git) — re-apply after any cluster rebuild.</p>
+    <p>Replicator runtime tools (mc + musl-built jq + libonig.so.5) are pre-staged in MinIO bucket <code>vault-replicator-tools</code> (anonymous read), pulled by the CronJob entrypoint via in-cluster wget — avoids the slow public-mirror outbound link.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <p><strong>Unseal after a restart</strong> (per pod, both clusters):</p>
+    <pre>for i in 0 1 2; do
+  KEY=$(jq -r ".unseal_keys_b64[$i]" ~/cloud-init/vault-rke2-dc-init-shamir.json)
+  kubectl -n vault exec vault-0 -- vault operator unseal "$KEY"
+done</pre>
+    <p><strong>Trigger an ad-hoc replication round</strong>:</p>
+    <pre>kubectl -n vault create job --from=cronjob/vault-replicator-export vri-now</pre>
+    <p><strong>Verify replication ran</strong>:</p>
+    <pre>mc ls lab/vault-snapshots-logical/dc/ | tail
+mc cat lab/vault-snapshots-logical/dc/latest.tar.gz | tar tz</pre>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p><strong>Edge HAProxy</strong> auto-fails over: <code>vault-rke2-be</code> backend has <code>dc</code> as primary and <code>dr</code> as <code>backup</code>; on DC pod scale-down, traffic flips to DR within ~9 s (3× 2 s health-check intervals).</p>
+    <p><strong>Manual promotion of DR (DC dies for real)</strong>:</p>
+    <ol>
+      <li>Suspend DR's import CronJob so it stops overwriting live writes:<br /><code>kubectl --kubeconfig rke2-dr -n vault patch cronjob vault-replicator-import -p '{"spec":{"suspend":true}}'</code></li>
+      <li>HAProxy already routes to DR; apps continue using <code>vault-rke2.apps.sub.comptech-lab.com</code>.</li>
+      <li>After DC restored: re-init DC vault, do a one-off reverse export from DR / import to DC, resume normal direction.</li>
+    </ol>
+    <p><strong>Known gaps</strong>: userpass passwords are NOT replicated (the export captures user metadata but Vault does not expose password hashes via API); reset on DR after import. Identity entities, PKI, transit deferred to v0.2.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/vault-replication">GitOps: <code>clusters/dc/manifests/vault-replication/</code></a></li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/39">MR !39</a> — drop transit auto-unseal, switch to Shamir (Phase 1)</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/40">MR !40</a> — logical replication DC → MinIO → DR (Phase 2)</li>
+      <li>ADR-0016 (RKE2 DC/DR platform), ADR-0019 (wiki update on platform change)</li>
+      <li><a href="https://developer.hashicorp.com/vault/docs/concepts/seal#seal-migration">HashiCorp: seal migration</a> · <a href="https://developer.hashicorp.com/vault/docs/concepts/recovery-mode">recovery mode</a></li>
     </ul>
   </section>
 
