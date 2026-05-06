@@ -100,7 +100,7 @@
     <div class="kicker">Identity & secrets</div>
     <h1>HashiCorp Vault</h1>
     <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    <p class="lede">Secrets store per cluster — Raft-3, Shamir-sealed (since 2026-05-06), DC→DR sync via logical export through MinIO.</p>
+    <p class="lede">Secrets store per cluster — Raft-3, transit auto-unseal restored 2026-05-06 (Phase 5) against vault-seed @ .41; DC→DR sync via logical export through MinIO.</p>
   </header>
 
   <section class="card">
@@ -108,19 +108,26 @@
     <dl class="meta meta-grid">
       <dt>Chart</dt><dd>hashicorp/vault 0.31.0</dd>
       <dt>Version</dt><dd>Vault 1.18.2</dd>
-      <dt>Mode</dt><dd>Raft HA, 3 replicas per cluster, <strong>Shamir seal</strong> (5 shares, 3 threshold)</dd>
+      <dt>Mode</dt><dd>Raft HA, 3 replicas per cluster, <strong>transit auto-unseal</strong> (Phase 5 restore 2026-05-06); <strong>recovery seal: Shamir</strong> 5 shares / 3 threshold</dd>
+      <dt>Auto-unseal source</dt><dd><code>vault-seed</code> VM at <code>30.30.30.41</code>, transit key <code>autounseal</code></dd>
       <dt>Hostname</dt><dd><code>vault-rke2.apps.sub.comptech-lab.com</code> (HAProxy DC primary + DR backup)</dd>
       <dt>Failover (DC→DR)</dt><dd>~9 s (edge HAProxy, smoke-tested 2026-05-04)</dd>
-      <dt>Init artefacts</dt><dd><code>~/cloud-init/vault-rke2-{dc,dr}-init-shamir.json</code> (chmod 600)</dd>
+      <dt>Init artefacts</dt><dd>cluster: <code>~/cloud-init/vault-rke2-{dc,dr}-init-recovery.json</code>; vault-seed: <code>~/cloud-init/vault-seed-init.txt</code> (all chmod 600)</dd>
       <dt>Cross-cluster sync</dt><dd>logical replication: hourly export DC → MinIO bucket <code>vault-snapshots-logical/</code> → 4-hourly import into DR</dd>
     </dl>
   </section>
 
   <section class="card">
     <h2>What it is</h2>
-    <p>Each cluster runs an independent 3-node Vault Raft cluster sealed with Shamir's Secret Sharing (operators hold 5 unseal-key shares per cluster; any 3 unseal a pod). After any pod restart — rolling helm upgrade, node reboot, eviction — the operator must feed 3 shares to each pod via <code>vault operator unseal</code>.</p>
-    <p>The 2026-05-05 transit auto-unseal target (<code>vault-seed</code> VM) was decommissioned; both clusters were re-initialised on Shamir 2026-05-06 (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/39">MR !39</a>). Vault was empty pre-migration so no data was lost.</p>
-    <p>Cross-cluster DC→DR sync is no longer Raft-snapshot ship (per-cluster Shamir keyrings can't decrypt each other's master keys). Instead, a logical replicator (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/40">MR !40</a>) runs as CronJobs in each cluster's <code>vault</code> namespace, exporting policies / auth methods / secret mounts / KV-v2 data through MinIO.</p>
+    <p>Each cluster runs an independent 3-node Vault Raft cluster, transit auto-unsealed against the <code>vault-seed</code> bootstrap Vault on a small VM at <code>30.30.30.41</code>. Pod restarts (helm upgrade, node reboot, eviction) come back unsealed automatically — no operator intervention required for normal ops.</p>
+    <p>The recovery-keys mechanism (5 Shamir shares, 3 threshold per cluster — generated at init time, stored at <code>~/cloud-init/vault-rke2-{dc,dr}-init-recovery.json</code>) lets operators perform privileged operations (root-token regeneration, seal migration) when both transit and root tokens are unavailable. Day-to-day, these keys are unused.</p>
+    <p>Phase 5 timeline (2026-05-06):</p>
+    <ul>
+      <li><strong>2026-05-05</strong> — vault-seed VM destroyed (Round-2 decommission); cluster Vaults left as transit-stranded (unsealed in pod memory but unable to restart cleanly).</li>
+      <li><strong>2026-05-06 ~08:30</strong> — Phase 1 migrated cluster Vaults to per-cluster Shamir (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/39">MR !39</a>), defusing the time bomb. Manual unseal required for every pod restart.</li>
+      <li><strong>2026-05-06 ~13:30</strong> — <strong>Phase 5</strong> rebuilt vault-seed at .41 with a fresh transit key (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/46">MR !46</a>); both cluster Vaults wiped and re-init'd on transit auto-unseal. Auto-unseal verified by <code>kubectl rollout restart sts vault</code> on both clusters — pods came back unsealed without intervention.</li>
+    </ul>
+    <p>Cross-cluster DC→DR sync continues via the Phase 2 logical replicator (<a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/40">MR !40</a>) running as CronJobs. With transit auto-unseal restored, Raft snapshot ship would also work as an alternative cross-cluster sync mechanism (both Vaults share the same transit key, so master-key decryption works across clusters), but the logical-replication path stays primary because it's already running and gives finer-grained control over what replicates.</p>
   </section>
 
   <section class="card">
@@ -130,7 +137,10 @@ DC cluster                      MinIO                      DR cluster
 ──────────                      ─────                      ──────────
 vault-{0,1,2}                                              vault-{0,1,2}
   ├─ Raft HA                                                 ├─ Raft HA
-  └─ Shamir seal                                             └─ Shamir seal
+  └─ transit auto-unseal                                     └─ transit auto-unseal
+        │                                                          │
+        └────► vault-seed @ 30.30.30.41 ◄─────────────────────────┘
+               (Shamir 5/3 — Shamir keys ~/cloud-init/vault-seed-init.txt)
         │                                                          │
   CronJob/vault-replicator-export                                  │
     schedule: 0 * * * *                                            │
@@ -144,7 +154,7 @@ vault-{0,1,2}                                              vault-{0,1,2}
                                                   CronJob/vault-replicator-import
                                                   schedule: 15 */4 * * *
                                                   replays into DR vault</pre>
-    <p>Per-cluster keys stay on disk on the operator host (<code>~/cloud-init/vault-rke2-{dc,dr}-init-shamir.json</code>, chmod 600). Edge HAProxy <code>vault-rke2-be</code> backend has DC primary + DR backup; failover happens at the L7 health-check layer (<code>/v1/sys/health?standbyok=true&drsecondaryok=true</code>) within ~9 s on DC pod scale-down.</p>
+    <p>Per-cluster keys stay on disk on the operator host (<code>~/cloud-init/vault-rke2-{dc,dr}-init-recovery.json</code>, chmod 600). Edge HAProxy <code>vault-rke2-be</code> backend has DC primary + DR backup; failover happens at the L7 health-check layer (<code>/v1/sys/health?standbyok=true&drsecondaryok=true</code>) within ~9 s on DC pod scale-down.</p>
   </section>
 
   <section class="card">
@@ -156,10 +166,16 @@ vault-{0,1,2}                                              vault-{0,1,2}
 
   <section class="card">
     <h2>Operations</h2>
-    <p><strong>Unseal after a restart</strong> (per pod, both clusters):</p>
+    <p><strong>Pod restart</strong>: with transit auto-unseal, no manual action needed. Pods come up unsealed automatically. If a pod hangs in the seal state, check that the <code>vault-seed-token</code> Secret in the <code>vault</code> namespace is present and that <code>vault-seed</code> at <code>http://30.30.30.41:8200</code> is reachable.</p>
+    <p><strong>Recovery operations</strong> (regenerate root token, seal migration, etc.) — use the recovery keys at <code>~/cloud-init/vault-rke2-{dc,dr}-init-recovery.json</code>:</p>
     <pre>for i in 0 1 2; do
-  KEY=$(jq -r ".unseal_keys_b64[$i]" ~/cloud-init/vault-rke2-dc-init-shamir.json)
-  kubectl -n vault exec vault-0 -- vault operator unseal "$KEY"
+  KEY=$(jq -r ".recovery_keys_b64[$i]" ~/cloud-init/vault-rke2-dc-init-recovery.json)
+  vault operator generate-root -nonce=&lt;nonce&gt; "$KEY"
+done</pre>
+    <p><strong>vault-seed</strong> requires Shamir-unseal after VM reboot — keys at <code>~/cloud-init/vault-seed-init.txt</code> (3 of 5):</p>
+    <pre>for i in 0 1 2; do
+  KEY=$(jq -r ".keys[$i]" ~/cloud-init/vault-seed-init.txt)
+  curl -sX PUT http://30.30.30.41:8200/v1/sys/unseal -d "{\"key\":\"$KEY\"}"
 done</pre>
     <p><strong>Trigger an ad-hoc replication round</strong>:</p>
     <pre>kubectl -n vault create job --from=cronjob/vault-replicator-export vri-now</pre>
@@ -186,6 +202,7 @@ mc cat lab/vault-snapshots-logical/dc/latest.tar.gz | tar tz</pre>
       <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/vault-replication">GitOps: <code>clusters/dc/manifests/vault-replication/</code></a></li>
       <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/39">MR !39</a> — drop transit auto-unseal, switch to Shamir (Phase 1)</li>
       <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/40">MR !40</a> — logical replication DC → MinIO → DR (Phase 2)</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/46">MR !46</a> — restore transit auto-unseal (Phase 5; rebuild vault-seed at .41)</li>
       <li>ADR-0016 (RKE2 DC/DR platform), ADR-0019 (wiki update on platform change)</li>
       <li><a href="https://developer.hashicorp.com/vault/docs/concepts/seal#seal-migration">HashiCorp: seal migration</a> · <a href="https://developer.hashicorp.com/vault/docs/concepts/recovery-mode">recovery mode</a></li>
     </ul>
