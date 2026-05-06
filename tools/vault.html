@@ -44,6 +44,7 @@
     <div class="nav-heading">Identity &amp; secrets</div>
     <a href="/tools/keycloak.html">Keycloak</a>
     <a href="/tools/vault.html" class="active" aria-current="page">HashiCorp Vault</a>
+    <a href="/tools/external-secrets.html">External Secrets Operator</a>
     <a href="/tools/wso2is.html">WSO2 Identity Server (apps)</a>
     <a href="/tools/wso2-apim.html">WSO2 API Manager (apps)</a>
   </div>
@@ -105,7 +106,7 @@
     <div class="kicker">Identity & secrets</div>
     <h1>HashiCorp Vault</h1>
     <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    <p class="lede">Secrets store per cluster — Raft-3, transit auto-unseal restored 2026-05-06 (Phase 5) against vault-seed @ .41; DC→DR sync via logical export through MinIO.</p>
+    <p class="lede">Secrets store per cluster — Raft-3, transit auto-unseal restored 2026-05-06 (Phase 5) against vault-seed @ .41; DC→DR sync via logical export through MinIO. The export job now uses a scoped periodic token, and OpenShift ESO has a validated smoke path into this Vault service.</p>
   </header>
 
   <section class="card">
@@ -119,6 +120,8 @@
       <dt>Failover (DC→DR)</dt><dd>~9 s (edge HAProxy, smoke-tested 2026-05-04)</dd>
       <dt>Init artefacts</dt><dd>cluster: <code>~/cloud-init/vault-rke2-{dc,dr}-init-recovery.json</code>; vault-seed: <code>~/cloud-init/vault-seed-init.txt</code> (all chmod 600)</dd>
       <dt>Cross-cluster sync</dt><dd>logical replication: hourly export DC → MinIO bucket <code>vault-snapshots-logical/</code> → 4-hourly import into DR</dd>
+      <dt>Export token</dt><dd>scoped periodic token from policy <code>vault-replicator-export</code>; replication scripts renew the token at job start (<code>gitops-rke2</code> commit <code>51059a7</code>)</dd>
+      <dt>OpenShift consumer</dt><dd>Red Hat ESO on <code>hub-dc</code>, <code>hub-dr</code>, <code>spoke-dc</code>, and <code>spoke-dr</code> uses per-cluster Kubernetes auth mounts for smoke validation</dd>
     </dl>
   </section>
 
@@ -165,8 +168,21 @@ vault-{0,1,2}                                              vault-{0,1,2}
   <section class="card">
     <h2>Configuration</h2>
     <p>Source of truth: <a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/shared/helm-values"><code>shared/helm-values/vault.yaml</code></a> (chart-level) and per-cluster overlays at <code>clusters/{dc,dr}/values/vault.yaml</code>.</p>
-    <p>Replication tooling lives at <code>clusters/{dc,dr}/manifests/vault-replication/</code> (script ConfigMap + ServiceAccount + CronJob); the <code>vault-replicator</code> Secret with VAULT_TOKEN + MinIO creds is applied imperatively (out of git) — re-apply after any cluster rebuild.</p>
+    <p>Replication tooling lives at <code>clusters/{dc,dr}/manifests/vault-replication/</code> (script ConfigMap + ServiceAccount + CronJob); the <code>vault-replicator</code> Secret with VAULT_TOKEN + MinIO creds is applied imperatively (out of git) — re-apply after any cluster rebuild. VAULT_TOKEN should be a scoped periodic token, not a root token.</p>
     <p>Replicator runtime tools (mc + musl-built jq + libonig.so.5) are pre-staged in MinIO bucket <code>vault-replicator-tools</code> (anonymous read), pulled by the CronJob entrypoint via in-cluster wget — avoids the slow public-mirror outbound link.</p>
+  </section>
+
+  <section class="card">
+    <h2>OpenShift ESO smoke consumer</h2>
+    <p>OpenShift uses this external Vault service as the shared secrets control plane. The OCP-side integration is tracked in the OpenShift wiki, but the Vault-side boundaries are:</p>
+    <ul>
+      <li><code>auth/kubernetes-hub-dc</code></li>
+      <li><code>auth/kubernetes-hub-dr</code></li>
+      <li><code>auth/kubernetes-spoke-dc</code></li>
+      <li><code>auth/kubernetes-spoke-dr</code></li>
+    </ul>
+    <p>Each auth mount has its own OpenShift API endpoint, CA, TokenReview credential, smoke read policy, and <code>external-secrets</code> role bound to <code>external-secrets/eso-vault-auth</code>. The smoke KV paths live under <code>secret/ocp/eso-smoke/&lt;cluster&gt;</code>.</p>
+    <p>Validation on 2026-05-06 found <code>SecretStore/rke2-vault</code> <code>Ready=True</code>, <code>ExternalSecret/eso-vault-smoke</code> <code>SecretSynced</code>, and target Secret key <code>message</code> on all four OpenShift clusters. Secret values, Vault tokens, and TokenReview JWTs are not stored in Git or in the wiki.</p>
   </section>
 
   <section class="card">
@@ -184,6 +200,7 @@ done</pre>
 done</pre>
     <p><strong>Trigger an ad-hoc replication round</strong>:</p>
     <pre>kubectl -n vault create job --from=cronjob/vault-replicator-export vri-now</pre>
+    <p>The export CronJob should renew its scoped periodic token automatically at job start. If listing Vault auth methods fails with <code>403 permission denied</code> or <code>invalid token</code>, rotate only <code>VAULT_TOKEN</code> in <code>vault/vault-replicator</code> with a new scoped periodic token.</p>
     <p><strong>Verify replication ran</strong>:</p>
     <pre>mc ls lab/vault-snapshots-logical/dc/ | tail
 mc cat lab/vault-snapshots-logical/dc/latest.tar.gz | tar tz</pre>

@@ -44,6 +44,7 @@
     <div class="nav-heading">Identity &amp; secrets</div>
     <a href="/tools/keycloak.html">Keycloak</a>
     <a href="/tools/vault.html">HashiCorp Vault</a>
+    <a href="/tools/external-secrets.html">External Secrets Operator</a>
   </div>
   <div class="nav-group sub-nav">
     <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
@@ -197,7 +198,7 @@
         <h3>HashiCorp Vault</h3>
         <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
       </div>
-      <p>Secrets store per cluster — Raft-3, transit auto-unseal (vault-seed @ .41); DC→DR sync via logical export through MinIO.</p>
+      <p>Secrets store per cluster — Raft-3, transit auto-unseal (vault-seed @ .41); scoped logical export through MinIO and OpenShift ESO smoke consumer.</p>
       <span class="tile-link">Open page →</span>
     </a>
     <a class="tool-tile" href="/tools/external-secrets.html">
@@ -205,7 +206,7 @@
         <h3>External Secrets Operator</h3>
         <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
       </div>
-      <p>Vault → Kubernetes Secret bridge. Apps reference Secrets the way they always have; ESO populates them from <code>secret/apps/&lt;name&gt;/*</code> via Vault Kubernetes auth.</p>
+      <p>Vault → Kubernetes Secret bridge. RKE2 platform apps use ClusterSecretStores; OpenShift uses a separate Red Hat ESO smoke path to the RKE2 Vault service.</p>
       <span class="tile-link">Open page →</span>
     </a>
     <a class="tool-tile" href="/tools/wso2is.html">
