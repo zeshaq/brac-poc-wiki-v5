@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WSO2 API Manager — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+<a class="brand-link" href="/">
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
+  </div>
+</div>
+</a>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity &amp; secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+    <a href="/tools/wso2is.html">WSO2 Identity Server (apps)</a>
+    <a href="/tools/wso2-apim.html" class="active" aria-current="page">WSO2 API Manager (apps)</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/redis.html">Redis</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD &amp; IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network &amp; shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="sidebar-foot">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light/dark theme">
+    <span class="theme-toggle-icon" aria-hidden="true">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="theme-toggle-label"></span>
+  </button>
+  <div class="footer-note">v5 · live snapshot</div>
+</div>
+</aside>
+
+<main id="main" class="content">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Catalogue</a> <span class="sep">/</span>
+    <span>Identity & secrets</span> <span class="sep">/</span>
+    <span class="current">WSO2 API Manager</span>
+  </nav>
+
+  <header class="page-header">
+    <div class="kicker">Identity & secrets</div>
+    <h1>WSO2 API Manager</h1>
+    <div class="badges"><span class="badge dc">DC</span></div>
+    <p class="lede">API gateway for future user-deployed demo apps — single replica all-in-one on DC, built-in Resident KM (no IS federation in v0.1).</p>
+  </header>
+
+  <section class="card">
+    <h2>Quick facts</h2>
+    <dl class="meta meta-grid">
+      <dt>Chart</dt><dd>wso2/am-all-in-one 4.3.0-3 (helm.wso2.com — latest published all-in-one chart)</dd>
+      <dt>Version</dt><dd>WSO2 APIM 4.3.0 (chart pins matched image)</dd>
+      <dt>Image</dt><dd><code>docker.io/wso2/wso2am</code> pinned by digest <code>sha256:7c8bfe6b73f3…</code> (public Docker Hub)</dd>
+      <dt>Profile</dt><dd>All-in-one (gateway + control plane + traffic manager + KM in one Deployment)</dd>
+      <dt>Replicas</dt><dd>1 (DC only; no DR)</dd>
+      <dt>Database</dt><dd>Embedded H2, file-backed; <strong>resets on pod restart</strong> since persistence is disabled</dd>
+      <dt>Hostnames</dt><dd><code>apim.apps.sub.comptech-lab.com</code> (management UI/API), <code>gateway.apps.sub.comptech-lab.com</code> (data plane)</dd>
+      <dt>TLS</dt><dd>Pre-issued cert-manager Certificate covering both hosts; shared <code>apim-tls</code> Secret</dd>
+      <dt>Key Manager</dt><dd>Built-in resident KM (no federation to <a href="/tools/wso2is.html">WSO2 IS</a> in v0.1)</dd>
+      <dt>Admin (default)</dt><dd>admin / admin (rotate in v0.2)</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p>WSO2 API Manager is the API gateway / publisher / developer portal for the platform. v0.1 deploys the <strong>all-in-one</strong> profile: a single Deployment running gateway + control plane + traffic manager + key manager in one JVM. Future user-deployed demo apps register their APIs with the publisher, consumers discover and subscribe to APIs through the dev portal, and runtime traffic flows through the gateway with token-based auth.</p>
+    <p>This deployment supersedes the legacy VM-based WSO2 APIM 4.4.0 distributed cluster (<code>apim-{dc,dr}-{cp,tm,gw}-{1,2}</code> — 12 VMs total) that was decommissioned 2026-05-05. The Phase 4 install (2026-05-06) is a clean-slate rebuild on RKE2 — far simpler shape, single pod, smoke-grade.</p>
+    <p>Per the IdP-strategy memory + ADR-0019: APIM uses its <strong>built-in resident KM</strong>, not federation to <a href="/tools/wso2is.html">WSO2 IS</a>. Reasons: (1) IS is on H2 with no persistence, so any IS pod restart wipes APIM's KM identity; (2) decoupling lets either IdP fail without taking down the other; (3) v0.2 may federate once IS gets Postgres + persistence.</p>
+  </section>
+
+  <section class="card">
+    <h2>Architecture</h2>
+    <pre class="ascii-art">
+DC cluster (rke2)
+─────────────────
+Deployment wso2-apim-am-all-in-one (1 replica)
+  └─ image docker.io/wso2/wso2am@sha256:7c8bfe…
+  └─ embedded H2 file DBs at /home/wso2carbon/.../repository/database/
+       ├─ WSO2AM_DB    (apim_db)
+       ├─ WSO2SHARED_DB (shared_db)
+       └─ WSO2CARBON_DB (registry/local)
+  └─ no clustering, no persistence (PVC unwired)
+  └─ Resident Key Manager (no IS federation)
+
+Service ClusterIP :9443 (HTTPS) + :9763 (HTTP) + :8243/8280 (gateway)
+
+Ingresses (nginx-ingress, backend-protocol HTTPS):
+  ├─ apim.apps.sub.comptech-lab.com    → :9443  (UI: publisher, devportal, admin, carbon)
+  └─ gateway.apps.sub.comptech-lab.com → :8243  (API runtime traffic)
+
+cert-manager Certificate apim-tls (clusters/dc/manifests/wso2-apim-prereqs/):
+  └─ dnsNames: [apim.apps..., gateway.apps...]
+  └─ secretName apim-tls (chart-shared between both Ingresses)
+
+Edge HAProxy (160.30.63.134:443)
+  └─ SNI fallthrough → public-apps-https-be → rke2-{1,2,3}:443
+     (no dedicated apim-rke2-be backend yet; v0.2)
+
+Future demo apps
+  ├─ register APIs in https://apim.apps.../publisher
+  ├─ discover/subscribe in https://apim.apps.../devportal
+  └─ call gateway at https://gateway.apps.../&lt;context&gt;/&lt;version&gt;/...
+       with Bearer access token from /token endpoint</pre>
+    <p>Single replica because: smoke test, embedded H2 doesn't tolerate concurrent writers, simplicity. v0.2 splits into the canonical distributed shape (cp / tm / gw / km separate Deployments) once load patterns warrant.</p>
+  </section>
+
+  <section class="card">
+    <h2>Configuration</h2>
+    <p>Source of truth: <a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/blob/main/shared/helm-values/wso2-apim.yaml"><code>shared/helm-values/wso2-apim.yaml</code></a> (chart-level values) + <code>clusters/dc/values/wso2-apim.yaml</code> (DC overlay, currently empty placeholder).</p>
+    <p>Key chart-value overrides:</p>
+    <ul>
+      <li><code>wso2.deployment.image.registry: docker.io</code> + <code>repository: wso2/wso2am</code> + <code>digest: sha256:7c8bfe…</code> — public Docker Hub, pinned by digest (chart only supports digest-based pulls, no tag).</li>
+      <li><code>wso2.deployment.replicas: 1</code> + <code>persistentRuntimeArtifacts.enabled: false</code> — single pod, no NFS.</li>
+      <li><code>wso2.apim.configurations.databases.type: h2</code> + per-DB JDBC URLs explicit (chart has no H2 default — empty values render as broken connection strings).</li>
+      <li><code>wso2.apim.configurations.iskm.enabled: false</code> — built-in resident KM.</li>
+      <li><code>kubernetes.ingress.tlsSecret: apim-tls</code> — shared with both Ingresses; pre-issued by the prereqs Certificate (see below).</li>
+      <li><code>kubernetes.ingress.{websocket,websub}.enabled: false</code> — WSS / WebSub disabled in v0.1.</li>
+      <li><code>kubernetes.ingressClass: nginx</code>, all cloud-provider blocks (aws/azure/gcp) <code>enabled: false</code>.</li>
+    </ul>
+    <p><strong>Prereqs Application</strong>: <code>clusters/dc/apps/wso2-apim-prereqs.yaml</code> at sync wave 10 applies <code>clusters/dc/manifests/wso2-apim-prereqs/</code>:</p>
+    <ul>
+      <li><code>namespace.yaml</code> — creates the <code>wso2-apim</code> ns.</li>
+      <li><code>certificate.yaml</code> — cert-manager <code>Certificate</code> covering both <code>apim.apps</code> and <code>gateway.apps</code> as SANs in a single LE cert, written to <code>apim-tls</code> Secret.</li>
+    </ul>
+    <p>Why pre-issue rather than per-Ingress annotations: the chart shares <code>tlsSecret</code> across both Ingresses. Putting <code>cert-manager.io/cluster-issuer</code> on each Ingress would make cert-manager create two Certificate resources both targeting the same Secret — they'd race, and only one of the two hostnames would land in the final cert. Pre-issuing the Certificate explicitly keeps both SANs in one cert.</p>
+    <p><strong>What's NOT configured yet</strong> (v0.2 work):</p>
+    <ul>
+      <li>External Postgres (apim_db + shared_db) — currently H2.</li>
+      <li>Persistence on Longhorn RWO so APIs / users / SPs survive pod restart.</li>
+      <li>Admin password rotation (currently <code>admin/admin</code>).</li>
+      <li>Edge HAProxy <code>apim-rke2-be</code> + <code>gateway-rke2-be</code> backends (currently SNI fallthrough).</li>
+      <li>Federation to WSO2 IS as KM (intra-WSO2 pattern from VM era) once IS gets persistence.</li>
+      <li>Bump to APIM 4.7.0 once WSO2 publishes a chart for it (only 4.3.0 is on helm.wso2.com today).</li>
+      <li>Distributed shape (cp / tm / gw / km separate Deployments).</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Operations</h2>
+    <ul>
+      <li><strong>Publisher</strong>: <code>https://apim.apps.sub.comptech-lab.com/publisher</code></li>
+      <li><strong>DevPortal</strong>: <code>https://apim.apps.sub.comptech-lab.com/devportal</code></li>
+      <li><strong>Admin / Carbon</strong>: <code>https://apim.apps.sub.comptech-lab.com/admin</code> · <code>/carbon</code></li>
+      <li><strong>OAuth token endpoint</strong>: <code>https://apim.apps.sub.comptech-lab.com/oauth2/token</code></li>
+      <li><strong>Gateway</strong>: <code>https://gateway.apps.sub.comptech-lab.com/&lt;context&gt;/&lt;version&gt;/&lt;resource&gt;</code></li>
+      <li><strong>Pod logs</strong>: <code>kubectl -n wso2-apim logs deploy/wso2-apim-am-all-in-one -f --tail=200</code></li>
+      <li><strong>Restart</strong>: <code>kubectl -n wso2-apim rollout restart deploy/wso2-apim-am-all-in-one</code> — NB: with persistence disabled, all H2 data resets, including registered APIs.</li>
+      <li><strong>Create + publish a sample API</strong> (smoke flow): in Publisher → Create API → Type "REST" → set name + endpoint → Lifecycle → Publish. Then in DevPortal → Subscribe with a default-tier app, generate keys, call gateway with the access token.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Failover</h2>
+    <p>None today. DC-only deployment, single replica. If the APIM pod dies, the gateway and management UIs go down until the pod restarts. With persistence disabled, the restart returns a freshly-initialised APIM — registered APIs, users, applications all gone.</p>
+    <p>Acceptable for smoke testing the gateway / publisher / devportal flows. Once real demo APIs are onboarded, v0.2 hardening (Postgres + persistence) is required so API metadata survives pod restarts.</p>
+    <p>No DR pair planned for v0.1. If demand grows, follow the Keycloak DC/DR pattern (per-cluster install, edge HAProxy DC-primary/DR-backup, identical realm/keystore on both sides — for APIM that means identical <code>WSO2KEY_STORE_PASS</code> and <code>WSO2_INTERNAL_KEY_STORE_PASS</code>, plus a shared external Postgres so API metadata is consistent).</p>
+  </section>
+
+  <section class="card">
+    <h2>References</h2>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/shared/helm-values/wso2-apim.yaml">GitOps: <code>shared/helm-values/wso2-apim.yaml</code></a></li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/wso2-apim-prereqs">GitOps: <code>clusters/dc/manifests/wso2-apim-prereqs/</code></a> (Certificate + Namespace)</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/45">MR !45</a> — Phase 4 APIM rollout</li>
+      <li>memory: <code>project_idp_strategy.md</code> — split-IdP rule (Keycloak = platform, WSO2 IS / APIM = apps)</li>
+      <li>ADR-0019 (platform changes update wiki)</li>
+      <li>Earlier (decommissioned) lifecycle: ADR-0004 (WSO2 APIM 4.4.0 fully distributed) — historical, VM-era; superseded by this in-cluster deployment</li>
+      <li><a href="https://apim.docs.wso2.com/en/4.3.0/">WSO2 APIM 4.3.0 docs</a> · <a href="https://github.com/wso2/kubernetes-apim">wso2/kubernetes-apim (chart source)</a></li>
+    </ul>
+  </section>
+
+  <nav class="page-nav" aria-label="Adjacent tools">
+    <a class="prev" href="/tools/wso2is.html" rel="prev">← WSO2 Identity Server</a>
+    <a class="next" href="/tools/strimzi.html" rel="next">Strimzi operator →</a>
+  </nav>
+
+</main>
+
+<script>
+  // Fall-back active state if the static class wasn't pre-rendered.
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
+</script>
+<script>
+  (function(){
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
