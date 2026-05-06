@@ -43,6 +43,45 @@ code {
   padding: 1px 6px;
   border-radius: 5px;
 }
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 0.6rem 0;
+  overflow-x: auto;
+  color: var(--text);
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+  color: inherit;
+}
+.card .meta-block {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0;
+}
+.card .meta-block li {
+  list-style: none;
+  padding-left: 0;
+}
+.card.callout-strength {
+  border-left: 3px solid var(--accent-2);
+}
+.card.callout-weakness {
+  border-left: 3px solid var(--dr);
+}
+.card.callout-improvement {
+  border-left: 3px solid var(--dr-only);
+}
 
 .skip {
   position: absolute;
