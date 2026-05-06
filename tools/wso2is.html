@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WSO2 Identity Server — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+<a class="brand-link" href="/">
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
+  </div>
+</div>
+</a>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity &amp; secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+    <a href="/tools/wso2is.html" class="active" aria-current="page">WSO2 Identity Server (apps)</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/redis.html">Redis</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD &amp; IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network &amp; shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="sidebar-foot">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light/dark theme">
+    <span class="theme-toggle-icon" aria-hidden="true">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="theme-toggle-label"></span>
+  </button>
+  <div class="footer-note">v5 · live snapshot</div>
+</div>
+</aside>
+
+<main id="main" class="content">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Catalogue</a> <span class="sep">/</span>
+    <span>Identity & secrets</span> <span class="sep">/</span>
+    <span class="current">WSO2 Identity Server</span>
+  </nav>
+
+  <header class="page-header">
+    <div class="kicker">Identity & secrets</div>
+    <h1>WSO2 Identity Server</h1>
+    <div class="badges"><span class="badge dc">DC</span></div>
+    <p class="lede">Standby IdP for future user-deployed demo apps — single replica on DC, intentionally separate from Keycloak.</p>
+  </header>
+
+  <section class="card">
+    <h2>Quick facts</h2>
+    <dl class="meta meta-grid">
+      <dt>Chart</dt><dd>wso2/identity-server 7.2.0-1 (helm.wso2.com)</dd>
+      <dt>Version</dt><dd>WSO2 IS 7.2.0</dd>
+      <dt>Image</dt><dd><code>docker.io/wso2/wso2is:7.2.0</code> (public Docker Hub)</dd>
+      <dt>Replicas</dt><dd>1 (DC only; no DR pair)</dd>
+      <dt>Database</dt><dd>Embedded H2 (smoke-test grade — data resets on pod restart)</dd>
+      <dt>Hostname</dt><dd><code>is.apps.sub.comptech-lab.com</code></dd>
+      <dt>Console</dt><dd><code>https://is.apps.sub.comptech-lab.com/console</code></dd>
+      <dt>OIDC discovery</dt><dd><code>/oauth2/oidcdiscovery/.well-known/openid-configuration</code></dd>
+      <dt>Admin (default)</dt><dd>admin / admin (rotate in v0.2)</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p>WSO2 IS is the <strong>second</strong> identity provider in the platform, deployed alongside <a href="/tools/keycloak.html">Keycloak</a>. The two have <strong>distinct, non-overlapping roles</strong> (codified in <code>memory/project_idp_strategy.md</code> and ADR-0019):</p>
+    <ul>
+      <li><strong>Keycloak</strong> — IdP for <em>platform tools</em>: Vault, AWX, Terrakube, Argo CD, GitLab, Jenkins, Nexus.</li>
+      <li><strong>WSO2 IS</strong> — IdP for <em>future user-deployed demo apps</em>. The user runs apps that authenticate against this IS, separate from the operations tooling stack.</li>
+    </ul>
+    <p>The two IdPs do <strong>not</strong> federate or trust each other. Don't wire WSO2 IS as an SP/IdP for Keycloak (or vice versa). When in doubt: new platform tool → Keycloak; new demo app → WSO2 IS.</p>
+    <p>This deployment supersedes the legacy VM-based <code>wso2is</code> (.7) + <code>wso2is-dr</code> (.27) pair that was decommissioned 2026-05-05 along with the rest of the WSO2 APIM stack. The Phase 3 install (2026-05-06) is a clean-slate rebuild on RKE2.</p>
+  </section>
+
+  <section class="card">
+    <h2>Architecture</h2>
+    <pre class="ascii-art">
+DC cluster (rke2)
+─────────────────
+Deployment wso2is-identity-server (1 replica)
+  └─ image docker.io/wso2/wso2is:7.2.0
+  └─ embedded H2 file DB at /home/wso2carbon/wso2is-7.2.0/repository/database/
+  └─ no clustering (single-replica), no persistence (PVC unwired)
+
+Service wso2is-identity-server :9443 (HTTPS, self-signed wso2carbon.p12)
+
+Ingress is.apps.sub.comptech-lab.com (nginx-ingress, cert-manager letsencrypt-prod)
+  └─ backend-protocol: HTTPS  (nginx talks to IS on :9443 with TLS)
+  └─ session affinity cookie  (paf cookie pinned to one replica)
+
+Edge HAProxy (160.30.63.134:443)
+  └─ SNI fallthrough → public-apps-https-be → rke2-{1,2,3}:443
+     (no dedicated is-rke2-be backend yet; v0.2)
+
+Future demo apps
+  └─ register as Service Providers in IS via DCR or Console
+  └─ OIDC issuer https://is.apps.sub.comptech-lab.com/oauth2/token</pre>
+    <p>Single replica because: smoke test, embedded H2 (which doesn't tolerate concurrent writers), and simplicity. v0.2 will move to external Postgres + replicas≥2 once the demo apps actually exercise it.</p>
+  </section>
+
+  <section class="card">
+    <h2>Configuration</h2>
+    <p>Source of truth: <a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/blob/main/shared/helm-values/wso2is.yaml"><code>shared/helm-values/wso2is.yaml</code></a> (chart-level values) + <code>clusters/dc/values/wso2is.yaml</code> (DC overlay, currently empty placeholder).</p>
+    <p>Key chart-value overrides:</p>
+    <ul>
+      <li><code>deployment.image.registry: docker.io</code> + <code>deployment.image.repository: wso2/wso2is</code> — public mirror, no WSO2 subscription required.</li>
+      <li><code>deployment.replicas: 1</code> + <code>deploymentToml.clustering.enabled: false</code> — single-pod, no kubernetes membership scheme noise.</li>
+      <li><code>deployment.persistence.enabled: false</code> — chart's PV templates assume Azure/AWS RWX; not relevant for our Longhorn lab.</li>
+      <li><code>deployment.apparmor.enabled: false</code> — RKE2 nodes don't ship the WSO2 default AppArmor profile.</li>
+      <li><code>deployment.pdb.minAvailable: 0</code> — 1 replica + minAvailable&gt;=1 makes the PodDisruptionBudget block all drains.</li>
+      <li><code>deployment.ingress.commonAnnotations</code> — adds <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> + <code>nginx.ingress.kubernetes.io/backend-protocol: HTTPS</code>.</li>
+    </ul>
+    <p><strong>What's NOT configured yet</strong> (v0.2 work):</p>
+    <ul>
+      <li>External Postgres (5 datasources: identity, shared, user, consent, agentIdentity) — currently all H2.</li>
+      <li>Persistence on Longhorn RWO so config / users / SPs survive pod restart.</li>
+      <li>Custom keystore (currently the chart's default <code>wso2carbon.p12</code> — issuer "WSO2 Carbon", suitable for testing but not for any external trust path).</li>
+      <li>Admin password rotation (currently <code>admin/admin</code>).</li>
+      <li>Edge HAProxy <code>is-rke2-be</code> backend (currently SNI-fallthrough to RKE2 ingress).</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Operations</h2>
+    <ul>
+      <li><strong>Console</strong>: <code>https://is.apps.sub.comptech-lab.com/console</code> (admin/admin)</li>
+      <li><strong>Carbon Mgmt</strong>: <code>https://is.apps.sub.comptech-lab.com/carbon</code> (legacy admin UI)</li>
+      <li><strong>OIDC discovery</strong>: <code>curl -sk https://is.apps.sub.comptech-lab.com/oauth2/oidcdiscovery/.well-known/openid-configuration | jq</code></li>
+      <li><strong>Pod logs</strong>: <code>kubectl -n wso2is logs deploy/wso2is-identity-server -f --tail=200</code></li>
+      <li><strong>Restart</strong>: <code>kubectl -n wso2is rollout restart deploy/wso2is-identity-server</code> — NB: with persistence disabled, all H2 data resets. Sleeping pods on node drain triggers the same.</li>
+      <li><strong>Add a Service Provider (OIDC)</strong>: Console → Applications → New → OIDC, fill in redirect URIs of the demo app, save. The chart's <code>commonAnnotations</code> on the Ingress include sticky-session affinity so the OAuth callback hits the same pod.</li>
+      <li><strong>Add a user</strong>: Console → User Management → Users → Add — for first demo app onboarding. Multi-tenant isolation lives in <code>/t/&lt;tenant&gt;/</code> URL prefix; default tenant is <code>carbon.super</code>.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Failover</h2>
+    <p>None today. DC-only deployment, single replica. If the IS pod dies, demo apps that authenticate against it fail until the pod restarts. With persistence disabled, the restart returns a freshly-initialised IS — registered SPs and users are gone.</p>
+    <p>This is acceptable for smoke testing the first demo app's OIDC flow. Once the user starts onboarding real apps, v0.2 hardening (Postgres + persistence) is required so SP definitions and user data survive pod restarts.</p>
+    <p>No DR pair planned for v0.1. If demand grows, follow the Keycloak DC/DR pattern (per-cluster install, edge HAProxy DC-primary/DR-backup, identical realm/keystore on both sides).</p>
+  </section>
+
+  <section class="card">
+    <h2>References</h2>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/shared/helm-values/wso2is.yaml">GitOps: <code>shared/helm-values/wso2is.yaml</code></a></li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/42">MR !42</a> — Phase 3 IS rollout</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/merge_requests/43">MR !43</a> — argocd project allow-list fix (helm.wso2.com)</li>
+      <li>memory: <code>project_idp_strategy.md</code> — split-IdP rule (Keycloak = platform, WSO2 IS = apps)</li>
+      <li>ADR-0019 (platform changes update wiki)</li>
+      <li>Earlier (decommissioned) lifecycle: ADR-0003 (WSO2 IS warm DR) — historical, VM-era; superseded by this in-cluster deployment</li>
+      <li><a href="https://is.docs.wso2.com/en/7.2.0/">WSO2 IS 7.2.0 docs</a> · <a href="https://github.com/wso2/identity-server">wso2/identity-server (chart source)</a></li>
+    </ul>
+  </section>
+
+  <nav class="page-nav" aria-label="Adjacent tools">
+    <a class="prev" href="/tools/vault.html" rel="prev">← HashiCorp Vault</a>
+    <a class="next" href="/tools/strimzi.html" rel="next">Strimzi operator →</a>
+  </nav>
+
+</main>
+
+<script>
+  // Fall-back active state if the static class wasn't pre-rendered.
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
+</script>
+<script>
+  (function(){
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
