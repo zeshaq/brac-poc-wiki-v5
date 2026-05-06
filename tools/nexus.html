@@ -115,30 +115,49 @@
     <p>Nexus runs per cluster on Longhorn-backed PVCs. The Docker hosted repo holds the redis-applier image (and any future custom images we bake). The Docker proxy repo, once configured, will absorb the slow/unreliable Quay.io and Docker Hub pulls that have hurt DR rollouts.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Nexus runs per cluster as a single-replica StatefulSet on Longhorn-backed PVCs (data + blob store). Two ingresses per cluster: <code>nexus.apps.sub.comptech-lab.com</code> (UI + REST API on port 8081) and <code>nexus-docker.apps.sub.comptech-lab.com</code> (Docker registry connector on port 5000-5003 depending on hosted/proxy/group).</p>
+    <p>Edge HAProxy SNI default routes both hostnames to the local cluster's nginx-ingress (DC primary by virtue of wildcard match; no DC-primary/DR-backup wired yet — pending Plan-09).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/nexus/</code> — Namespace, StatefulSet, Service, Ingress (regular + Docker), Certificate, PVC, bootstrap Job + Groovy ConfigMap.</p>
+    <p><strong>Repos planned (Groovy bootstrap not yet run)</strong>:
+    <ul>
+      <li><code>docker-hosted</code> — internal images (redis-applier already pushed manually)</li>
+      <li><code>docker-proxy</code> — proxies <code>quay.io</code> and <code>registry-1.docker.io</code> to absorb the slow/unreliable upstream pulls (this is what hurt DR rollouts of Terrakube + AWX)</li>
+      <li><code>docker-group</code> — combines hosted + proxy for clients</li>
+      <li>Maven, npm, Helm hosted repos for future use</li>
+    </ul></p>
+    <p>Auth: human users via OIDC (Keycloak <code>nexus</code> client — to be wired); machine accounts <code>mavenbot</code>, <code>jenkinsbot</code> for CI integration. Admin password lives at <code>~/cloud-init/nexus-admin-password</code> (chmod 600).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://nexus.apps.sub.comptech-lab.com</code></li>
+      <li><strong>Docker login</strong>: <code>docker login nexus-docker.apps.sub.comptech-lab.com</code></li>
+      <li><strong>Push image</strong>: <code>docker tag &lt;src&gt; nexus.apps.sub.comptech-lab.com/&lt;name&gt;:&lt;tag&gt; && docker push ...</code> (port-prefix-less when through the docker connector ingress).</li>
+      <li><strong>Bootstrap repos</strong>: re-run the Groovy Job via <code>kubectl -n nexus create job --from=job/nexus-bootstrap nexus-bs-now</code></li>
+      <li><strong>Backups</strong>: planned MinIO bucket <code>nexus-blobs</code> (CronJob not yet created — STATE.md TODO).</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Independent per cluster. Each cluster has its own Nexus with its own data; pushed images on DC are NOT automatically on DR. Building once and pushing to both clusters' Nexuses is the current pattern (or use ctr import to bypass the registry entirely, as we did for Terrakube + AWX images on DR).</p>
+    <p>No DC-primary/DR-backup edge backend wired yet. Plan-09 will add <code>nexus-rke2-be</code>.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/nexus">GitOps: <code>clusters/dc/manifests/nexus/</code></a></li>
+      <li>memory: <code>~/cloud-init/nexus-{admin,mavenbot,jenkinsbot}-password</code> (chmod 600)</li>
+      <li>ADR-0005 (SSO humans + local machines) — auth model</li>
+      <li><a href="https://help.sonatype.com/repomanager3">Sonatype Nexus 3 docs</a></li>
     </ul>
   </section>
 

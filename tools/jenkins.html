@@ -114,30 +114,42 @@
     <p>Standard Helm chart install. Future work: bake a custom controller image with <code>plugins.txt</code> pre-installed using the same podman + <code>ctr import</code> pattern used for redis-applier.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Per-cluster single-replica Jenkins controller. Default LTS image — no custom plugins-baked image yet (that's a TODO; would follow the same podman + <code>ctr import</code> pattern used for redis-applier). Persistent JENKINS_HOME on a Longhorn PVC.</p>
+    <p>Earlier the platform had VM-based Jenkins (jenkins-dc / jenkins-dr) with rsync staging + MinIO snapshot backups (ADR-0006). Both VMs were decommissioned 2026-05-05 in favour of the in-cluster RKE2 Jenkins; the snapshot/promote pattern doesn't apply anymore.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/jenkins/</code>. Standard Jenkins helm-chart-style raw manifests. <code>casc.yaml</code> (configuration-as-code) is loaded from a ConfigMap at startup and drives admin user setup, security realm, and global tools.</p>
+    <p>Auth today: local admin (escape-hatch password at <code>~/cloud-init/jenkins-escape-hatch-password</code>, chmod 600). Keycloak OIDC integration is planned via the <a href="/tools/keycloak.html">Keycloak</a> realm's <code>jenkins</code> client (not yet wired).</p>
+    <p>Build secrets reference the Nexus <code>jenkinsbot</code> credential (password at <code>~/cloud-init/nexus-jenkinsbot-password</code>) so Jenkins can push artefacts to Nexus.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://jenkins.apps.sub.comptech-lab.com</code></li>
+      <li><strong>Local-admin login (escape hatch)</strong>: read <code>~/cloud-init/jenkins-escape-hatch-password</code></li>
+      <li><strong>Plugin updates</strong>: today via UI; v0.2 the controller image bakes <code>plugins.txt</code>.</li>
+      <li><strong>Reset state</strong>: delete the JENKINS_HOME PVC and let Argo recreate; the casc.yaml ConfigMap restores the security realm.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Each cluster has an independent Jenkins. Pipelines run on whichever cluster they were created in. There is no automated cross-cluster pipeline replication — the OSS chart has no concept of it. If DC's Jenkins dies, DR's Jenkins is reachable but has no shared job history.</p>
+    <p>No DC-primary/DR-backup edge backend wired today; same situation as Nexus / RedisInsight (Plan-09 follow-up).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/nexus.html">Nexus</a> — artefact destination (<code>jenkinsbot</code> credential)</li>
+      <li><a href="/tools/keycloak.html">Keycloak</a> — planned OIDC IdP</li>
+      <li>ADR-0006 (Jenkins DC/DR — VM-era, superseded by in-cluster deployment 2026-05-05)</li>
+      <li><a href="https://www.jenkins.io/doc/">Upstream Jenkins docs</a> · <a href="https://www.jenkins.io/projects/jcasc/">JCasC</a></li>
     </ul>
   </section>
 

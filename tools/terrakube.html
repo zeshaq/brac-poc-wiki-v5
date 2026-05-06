@@ -121,30 +121,52 @@
     <p>The DR images <code>azbuilder/api-server:2.30.1</code> and <code>azbuilder/executor:2.30.1</code> were hand-imported via <code>ctr</code> because Docker Hub pulls on DR are unreliable and slow.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Four components per cluster:</p>
+    <ul>
+      <li><code>terrakube-ui</code> — React SPA (port 80 ingress as <code>terrakube-ui.apps...</code>)</li>
+      <li><code>terrakube-api</code> — Spring Boot backend (<code>terrakube-api.apps...</code>)</li>
+      <li><code>terrakube-executor</code> — runs Terraform/OpenTofu plans (no edge ingress; called internally by api)</li>
+      <li><code>terrakube-registry</code> — module registry (<code>terrakube-reg.apps...</code>)</li>
+    </ul>
+    <p>Each cluster has its own Postgres + Redis StatefulSets (chart prereqs). Remote state shared via MinIO bucket <code>terrakube-state</code> (chmod-protected by per-app credentials at <code>~/cloud-init/minio-terrakube-secret-key</code>).</p>
+    <p>OIDC: public client <code>terrakube</code> in the Keycloak <code>comptech</code> realm, with PKCE and a <code>groups</code> claim mapper (so a user's Keycloak group membership becomes their Terrakube role).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>shared/helm-values/terrakube.yaml</code> + <code>clusters/&lt;cluster&gt;/values/terrakube.yaml</code>. Two ArgoCD Applications: <code>terrakube-prereqs</code> (Postgres + Redis) at sync-wave N-1, then <code>terrakube</code> (the four components) at wave N.</p>
+    <p>DR-specific issue: <code>azbuilder/api-server:2.30.1</code> and <code>azbuilder/executor:2.30.1</code> Docker Hub pulls on DR take >15 min and often fail. Workaround: <code>ctr import</code> the image tarballs onto each DR node manually after a podman pull on the dl385 host. Long-term fix: Nexus docker-proxy (planned).</p>
+    <p>Memorable settings: <code>nginx.ingress.kubernetes.io/ssl-redirect=false</code> (MR #32 — registry needs to serve HTTP for Terraform's CLI), registry resource limit bumped to 1Gi (MR #31 — OOM at 512Mi).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://terrakube-ui.apps.sub.comptech-lab.com</code> — login via Keycloak.</li>
+      <li><strong>Onboard a new user</strong>: in Keycloak admin UI, add the user to a group (e.g. <code>TERRAKUBE_ADMIN</code>); first login auto-provisions on Terrakube.</li>
+      <li><strong>Workspace state</strong>: stored in MinIO under <code>terrakube-state/&lt;org&gt;/&lt;workspace&gt;/...</code></li>
+      <li><strong>Executor logs</strong>: <code>kubectl -n terrakube logs deploy/terrakube-executor</code></li>
+      <li><strong>Re-run failed plans</strong>: from the UI's job history, click "Re-run" — pulls the same Terraform module + variables.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Three edge HAProxy backends — <code>terrakube-{ui,api,reg}-rke2-be</code>, each with DC primary + DR backup. Healthcheck: <code>GET /actuator/health</code> for api/registry, <code>GET /</code> for ui. <code>^(200|301|302|307|308)$</code>.</p>
+    <p><strong>Smoke test PASSED 2026-05-05</strong>: cutover ~16 s; cutback ~65 s — Spring Boot api cold-start dominates the cutback window. 200s served continuously from DR backup throughout.</p>
+    <p>Caveat: workspace state is in MinIO so it's shared across clusters cleanly. Job history is per-cluster Postgres so DR has no record of DC's plans until manually exported.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/terrakube">GitOps: <code>clusters/dc/manifests/terrakube/</code></a></li>
+      <li>MR #28-#32 (rollout, ssl-redirect, registry mem)</li>
+      <li><a href="/tools/keycloak.html">Keycloak</a> — IdP</li>
+      <li><a href="/tools/minio.html">MinIO</a> — remote state</li>
+      <li><a href="https://docs.terrakube.io/">Terrakube docs</a> · <a href="https://github.com/AzBuilder/terrakube">terrakube source</a></li>
     </ul>
   </section>
 

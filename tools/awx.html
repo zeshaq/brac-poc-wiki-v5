@@ -120,30 +120,50 @@
     <p>One AWX instance per cluster, fronted by the edge HAProxy with DC primary + DR backup. Container images (<code>awx</code>, <code>awx-ee</code>, <code>awx-operator</code>) are <code>ctr</code>-imported on DR (and rke2-3) to avoid slow Quay.io pulls.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Operator-driven: <code>awx-operator</code> (Helm chart 3.2.1) runs in <code>awx</code> namespace, watches an <code>AWX</code> CR, and reconciles it into the standard AWX deployment — <code>awx-task</code> (Celery worker), <code>awx-web</code> (Django + nginx), and an operator-managed Postgres-15-c9s StatefulSet. Each cluster has its own AWX with its own database; jobs and inventories on DC don't exist on DR.</p>
+    <p>OIDC: <code>SOCIAL_AUTH_OIDC_*</code> environment variables in the AWX CR's <code>extra_settings</code> point at the Keycloak <code>awx</code> confidential client. New users get auto-provisioned on first login. Group-to-team mapping rides through OIDC group claims.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/awx/</code> + <code>clusters/&lt;cluster&gt;/manifests/awx-operator/</code>. Operator chart from <code>https://ansible-community.github.io/awx-operator-helm</code>.</p>
+    <p>The AWX CR specifies <code>image_pull_policy</code>, OIDC settings, and Postgres prereqs. To bypass slow Quay.io pulls on DR, the three core images are <code>ctr import</code>'ed onto DR nodes (and rke2-3) imperatively:
+    <ul>
+      <li><code>quay.io/ansible/awx:24.6.1</code></li>
+      <li><code>quay.io/ansible/awx-ee:24.6.1</code></li>
+      <li><code>quay.io/ansible/awx-operator:2.19.1</code></li>
+    </ul>
+    Long-term fix: the Nexus docker-proxy repo (planned).</p>
+    <p>Admin password: <code>~/cloud-init/awx-admin-password</code> (DC) and <code>~/cloud-init/awx-rke2-admin-password</code> (DR). The Keycloak <code>awx</code> client secret is a placeholder (<code>awx-PLACEHOLDER</code>) — rotation pending.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://awx.apps.sub.comptech-lab.com</code>. After login, set up Inventories + Credentials + Project (git source) + Job Templates.</li>
+      <li><strong>Operator status</strong>: <code>kubectl -n awx get awx</code></li>
+      <li><strong>Job runner pods</strong>: <code>kubectl -n awx get pods -l app.kubernetes.io/name=awx-task</code></li>
+      <li><strong>Restart workers after long-running stuck jobs</strong>: <code>kubectl -n awx rollout restart deploy awx-task</code></li>
+      <li><strong>Onboard a Keycloak user to TERRAKUBE_ADMIN/AWX_ADMIN groups</strong>: via Keycloak admin UI, then they get auto-provisioned with the right team on next login.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Edge HAProxy backend <code>awx-rke2-be</code>, DC primary + DR backup. Healthcheck: <code>GET /</code> matching <code>^(200|301|302|307|308)$</code> — 302 → <code>/migrations_notran/</code> during migrations, 302 → <code>/login/</code> at steady state.</p>
+    <p><strong>Smoke test PASSED 2026-05-05</strong>: <code>kubectl scale deploy awx-web awx-task --replicas=0</code> on DC → DR took over within ~14 s; restoring DC → traffic returned within ~42 s. AWX <code>/api/v2/ping/</code> served continuously from DR backup throughout.</p>
+    <p>Caveat: no automatic AWX-database replication. Job history, inventories, schedules, secrets all live in each cluster's Postgres independently. After failover, DR is "blank-slate AWX" unless seeded from a DC backup.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/awx">GitOps: <code>clusters/dc/manifests/awx/</code></a></li>
+      <li>MR #33 (rollout), #34/#35 (cpu strings), #36 (postgres init container), #37/#38 (cosmetic OOS attempts)</li>
+      <li><a href="/tools/keycloak.html">Keycloak</a> — IdP</li>
+      <li><a href="https://github.com/ansible/awx-operator">Upstream awx-operator</a> · <a href="https://ansible.readthedocs.io/projects/awx/">AWX docs</a></li>
     </ul>
   </section>
 

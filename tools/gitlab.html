@@ -115,30 +115,43 @@
     <p>GitLab is treated as shared infrastructure for the POC. There is no DC/DR pair for it — a single instance is sufficient for the demo's scope. CI on the GitOps repo gates merges.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>GitLab Omnibus 18.11.1 (CE) on a dedicated VM at <code>30.30.30.5</code> (br30). Single instance for the lab — there is no DC/DR pair. Hosted projects: <code>infra/argocd-bootstrap</code> (root Argo CD bootstrap), <code>infra/gitops-rke2</code> (the application monorepo), <code>brac/brac-poc-docs</code> (issues/MRs only — wiki feature was decommissioned 2026-05-06; presentation surface moved to <a href="https://brac-poc-wiki-v5.pages.dev">brac-poc-wiki-v5.pages.dev</a>).</p>
+    <p>As of 2026-05-06, the same VM also hosts a <strong>GitLab Runner</strong> as a Docker container (<code>gitlab/gitlab-runner:v18.11.2</code>) so CI on the GitOps repo runs again. Runner uses Docker executor (host <code>/var/run/docker.sock</code> mount), <code>concurrent=4</code>, project-scoped to <code>infra/gitops-rke2</code>.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Omnibus install — <code>/etc/gitlab/gitlab.rb</code> on the VM is the source of truth. The legacy <code>omniauth_providers</code> block for WSO2 IS is in place but dead (WSO2 IS VM was decommissioned 2026-05-05; the issuer endpoint 503s).</p>
+    <p><strong>Runner</strong>: <code>/etc/gitlab-runner/config.toml</code> (chmod 600, root) holds the auth token (<code>glrt-...</code>) generated via the <code>POST /api/v4/user/runners</code> API. systemd-managed via <code>/etc/systemd/system/gitlab-runner.service</code> wrapping <code>docker run --network host</code>. NB: there is no <code>gitlab-runner</code> CLI on the host (deb install was abandoned because <code>gitlab-runner-helper-images</code> is 530 MB and the lab outbound is throttled to ~0.5 MB/min — the container ships them inside).</p>
+    <p>Auth tokens / PATs at <code>~/cloud-init/gitlab-md-pat</code> (md@comptech.com.bd, used by automation) and <code>~/cloud-init/gitlab-root-pat</code> (legacy; do not use).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://gitlab.apps.sub.comptech-lab.com</code></li>
+      <li><strong>Runner status</strong>: <code>ssh ze@30.30.30.5 'sudo systemctl status gitlab-runner; sudo journalctl -u gitlab-runner -n 50 --no-pager'</code></li>
+      <li><strong>Restart runner</strong> (after config edit): <code>sudo systemctl restart gitlab-runner</code></li>
+      <li><strong>Add a new project-scoped runner</strong>: <code>POST /api/v4/user/runners</code> with <code>runner_type=project_type, project_id=&lt;id&gt;</code>, then add the <code>[[runners]]</code> stanza to <code>config.toml</code> with the returned auth token.</li>
+      <li><strong>Backup</strong>: standard Omnibus <code>gitlab-backup create</code> targets the VM-local <code>/var/opt/gitlab/backups/</code>; ship to MinIO is a follow-up.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>None. Single-instance, single point of failure for git history and CI. If the GitLab VM dies, the GitOps repo is gone (until VM restore from KVM snapshot or backup); both clusters keep running on whatever they last reconciled, but new MRs can't merge and Argo can't pick up changes.</p>
+    <p>Mitigation: regular <code>gitlab-backup</code> + KVM snapshots of the GitLab VM. Cloning the repo to <code>/tmp/gitops-rke2</code> on the dl385 host gives a working copy too.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2">infra/gitops-rke2</a> — application monorepo</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/brac/brac-poc-docs">brac/brac-poc-docs</a> — issues/MRs (wiki retired)</li>
+      <li>memory: <code>feedback_gitlab_credentials.md</code> (use md user PAT)</li>
+      <li><a href="https://docs.gitlab.com/ee/install/installation.html">GitLab Omnibus install</a> · <a href="https://docs.gitlab.com/runner/">GitLab Runner docs</a></li>
     </ul>
   </section>
 
