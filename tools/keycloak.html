@@ -120,30 +120,71 @@
     <p>Single-replica StatefulSet per cluster with its own Postgres StatefulSet. Realm is defined declaratively and loaded at startup. The codecentric chart's <code>extraEnv</code> is used to set <code>KC_HOSTNAME</code> to the public HTTPS URL and to drop the <code>/auth</code> URL prefix so the issuer lives at the root.</p><p>OIDC clients for the platform tools are pre-registered in the realm config; a few still hold placeholder secrets pending rotation.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <pre class="ascii-art">
+DC cluster                                  DR cluster
+──────────                                  ──────────
+StatefulSet keycloak-keycloakx (1 pod)      StatefulSet keycloak-keycloakx (1 pod)
+  └─ realm comptech (pre-imported)            └─ realm comptech (pre-imported)
+StatefulSet keycloak-postgres (1 pod)       StatefulSet keycloak-postgres (1 pod)
+
+Edge HAProxy (160.30.63.134:443)
+  ├─ keycloak-rke2-be
+  │    server dc 30.30.30.2:80 check
+  │    server dr 30.30.31.1:80 check backup
+  └─ probe: GET /realms/master/.well-known/openid-configuration → 200|301|302|307|308
+
+Clients (Vault, AWX, Terrakube, Argo CD, GitLab, Jenkins, Nexus, future apps)
+  → https://auth.apps.sub.comptech-lab.com/realms/comptech</pre>
+    <p>Each cluster runs a fully independent Keycloak — same realm definition pre-imported on both, same admin password expected (currently per-cluster passwords; aligning is a STATE.md TODO). Postgres is per-cluster; users created on DC don't exist on DR until a manual export/import. For platform tools whose user base is the same handful of operators, this is acceptable.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source of truth: <a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/blob/main/shared/helm-values/keycloak.yaml"><code>shared/helm-values/keycloak.yaml</code></a> (chart-level) and <code>clusters/&lt;cluster&gt;/values/keycloak.yaml</code> (per-cluster). Chart from <code>https://codecentric.github.io/helm-charts</code>, version <code>7.0.0</code>.</p>
+    <p>Key <code>extraEnv</code> settings (came in via MR #26 + #27):
+    <ul>
+      <li><code>KC_HOSTNAME=https://auth.apps.sub.comptech-lab.com</code> — pins the issuer to public HTTPS instead of in-cluster service URL.</li>
+      <li><code>http.relativePath=/</code> — drops the legacy <code>/auth</code> URL prefix; issuer lives at the root.</li>
+      <li>Realm <code>comptech</code> is loaded from a ConfigMap at startup via <code>--import-realm</code>.</li>
+    </ul></p>
+    <p>OIDC clients in the realm:</p>
+    <ul>
+      <li><code>vault</code> — confidential, secret in Vault realm config (still <code>vault-PLACEHOLDER</code>; rotate via Keycloak admin UI)</li>
+      <li><code>argocd</code> — confidential (<code>argocd-PLACEHOLDER</code>)</li>
+      <li><code>awx</code> — confidential, used by AWX <code>SOCIAL_AUTH_OIDC_*</code> (<code>awx-PLACEHOLDER</code>)</li>
+      <li><code>terrakube</code> — public client with PKCE, <code>groups</code> claim mapper</li>
+      <li>Future clients per <a href="/">overview</a> — GitLab, Jenkins, Nexus to be wired</li>
+    </ul>
+    <p><strong>Admin credentials</strong>: <code>~/cloud-init/keycloak-{dc,dr}-admin.txt</code> (chmod 600, per-cluster). Aligning the two via Vault-backed Secret is the long-term plan.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Admin UI</strong>: <code>https://auth.apps.sub.comptech-lab.com/admin</code></li>
+      <li><strong>Discovery doc</strong>: <code>curl -sk https://auth.apps.sub.comptech-lab.com/realms/comptech/.well-known/openid-configuration | jq</code></li>
+      <li><strong>Add an OIDC client</strong>: edit the realm CM in <code>clusters/&lt;cluster&gt;/manifests/keycloak/realm-comptech-cm.yaml</code>, commit, Argo applies — Keycloak picks up the new client on next start (or trigger a realm reimport via admin UI).</li>
+      <li><strong>Realm export</strong> (for DR sync of users): <code>kubectl -n keycloak exec keycloak-keycloakx-0 -- /opt/keycloak/bin/kc.sh export --realm comptech --file /tmp/realm.json</code></li>
+      <li><strong>Smoke check OIDC discovery from a client side</strong>: in a Vault pod, <code>curl -k https://auth.apps.sub.comptech-lab.com/realms/comptech/.well-known/openid-configuration</code> should return 200 with <code>"issuer": "https://auth.apps..."</code>.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Edge HAProxy backend <code>keycloak-rke2-be</code> with <code>dc</code> primary + <code>dr backup</code>; failover happens on health-check failure.</p>
+    <p><strong>Smoke test PASSED 2026-05-05</strong>: <code>kubectl scale sts keycloak-keycloakx --replicas=0</code> on DC → DR took over within ~13 s; restoring DC → traffic returned within ~18 s. The discovery doc was served continuously through the cutover.</p>
+    <p>Failover gotcha: if the same admin user logs in DC then fails to DR, their session cookie won't be valid (sessions are not replicated). They re-authenticate. Apps using token-based auth (Bearer JWT) survive failover because tokens are signed with the realm key, and the realm key is identical on both clusters (pre-imported from the same source).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/keycloak">GitOps: <code>clusters/dc/manifests/keycloak/</code></a> — realm CM + Postgres prereqs</li>
+      <li>MR #17–#23 (rollout), #26 (HTTPS issuer), #27 (drop /auth prefix), #24 (port 80 ingress), #25 (extraEnv dedup)</li>
+      <li>memory: <code>project_idp_strategy.md</code> — Keycloak is the platform IdP; WSO2 IS is reserved for future demo apps; never cross-wire</li>
+      <li><a href="https://www.keycloak.org/documentation">Upstream Keycloak docs</a> · <a href="https://github.com/codecentric/helm-charts/tree/master/charts/keycloakx">codecentric/keycloakx chart</a></li>
     </ul>
   </section>
 

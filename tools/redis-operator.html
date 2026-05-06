@@ -114,30 +114,40 @@
     <p>Standard Spotahome operator install per cluster. Owns the lifecycle of the RedisFailover CR including Sentinel quorum, primary election, and rolling restarts.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Spotahome's <code>redis-operator</code> runs in <code>redis-operator</code> namespace per cluster. It watches <code>RedisFailover</code> CRs and reconciles them into a primary + N replicas Deployment plus a 3-node Sentinel quorum. Sentinel handles primary election; clients do their initial Sentinel-aware connection (talk to Sentinel, get current primary) instead of pinning a DNS name.</p>
+    <p>The operator does NOT manage cross-cluster replication. That layer is handled by the Kafka WAL pattern (<a href="/tools/redis-applier.html">redis-applier</a> + <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>) — see <a href="/tools/redis.html">Redis</a>. Each cluster has its own independent RedisFailover.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/redis/</code> — operator install + RedisFailover CR + Service overrides. The CR specifies replica count, image, resources, persistence, and Sentinel quorum config.</p>
+    <p>The RedisFailover CR for this lab uses the default no-auth posture (no <code>requirepass</code>); access control rides at the Kubernetes / NetworkPolicy layer. If we re-enable auth, set it via the CR's <code>auth</code> stanza which picks up a Secret.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Operator status</strong>: <code>kubectl -n redis-operator get pods</code></li>
+      <li><strong>RedisFailover health</strong>: <code>kubectl -n redis get redisfailovers.databases.spotahome.com</code> shows phase per CR.</li>
+      <li><strong>Force a Sentinel-driven failover</strong>: <code>kubectl -n redis exec rfs-redis-0 -- redis-cli -p 26379 sentinel failover redis-master</code></li>
+      <li><strong>Inspect Sentinel state</strong>: <code>kubectl -n redis exec rfs-redis-0 -- redis-cli -p 26379 sentinel masters</code></li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Per-cluster — the operator manages <em>in-cluster</em> Redis failover via Sentinel. DC↔DR Redis durability is the Kafka WAL story, not the operator's responsibility.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/redis.html">Redis</a> — the consumer of this operator</li>
+      <li><a href="/tools/redis-applier.html">redis-applier</a> — implements the WAL pattern that gives DC↔DR durability</li>
+      <li>ADR-0018 (Redis via Kafka WAL)</li>
+      <li><a href="https://github.com/spotahome/redis-operator">Upstream Spotahome redis-operator</a></li>
     </ul>
   </section>
 

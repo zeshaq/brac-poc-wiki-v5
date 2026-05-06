@@ -114,30 +114,40 @@
     <p>Standard Strimzi install per cluster. Owns the lifecycle of the Kafka CR, the per-user SCRAM credentials (KafkaUser CRs), topic CRs, and on DR the KafkaMirrorMaker2 CR.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Strimzi runs in the <code>strimzi-operator</code> namespace per cluster, with cluster role permissions to reconcile Kafka CRs in the watched namespace <code>kafka</code>. It owns the entire Kafka lifecycle: KRaft controller + broker pools, KafkaUsers (SCRAM-SHA-512 credentials), KafkaTopics, and on DR the KafkaMirrorMaker2 CR.</p>
+    <p>The operator's reconcile loop is what materialises the Kafka cluster from the <code>Kafka</code> CR; we don't directly manage StatefulSets or Services. Editing the CR changes the deployment in place — listener tweaks, advertisedPort changes, broker scale-up all happen via Strimzi.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/strimzi-operator/</code> (operator install, CRDs included via the operator chart). Once installed, the actual data-plane lives in <code>clusters/&lt;cluster&gt;/manifests/kafka/</code> as Kafka CR + KafkaUser + KafkaTopic resources.</p>
+    <p>Watching scope is a single namespace (<code>kafka</code>), set via the operator's <code>STRIMZI_NAMESPACE</code> env. We don't run the operator cluster-wide — keeps RBAC tight and reconciles fast.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Operator pod logs</strong>: <code>kubectl -n strimzi-operator logs deploy/strimzi-cluster-operator -f</code></li>
+      <li><strong>Reconcile a Kafka CR after an edit</strong>: it's automatic; for impatience, <code>kubectl -n kafka annotate kafka kafka strimzi.io/manual-rolling-update=true</code> triggers a rolling restart.</li>
+      <li><strong>Pause reconciliation temporarily</strong>: <code>kubectl -n kafka annotate kafka kafka strimzi.io/pause-reconciliation=true</code> (e.g. during partial migrations).</li>
+      <li><strong>Upgrade the operator</strong>: bump the manifest version in GitOps; the new operator version handles the in-place upgrade of all owned resources.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Per-cluster — DR has its own Strimzi reconciling DR Kafka. No cross-cluster operator coordination. If the operator pod dies, the existing Kafka cluster keeps serving (operator absence doesn't break the data plane); only schema changes block.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/kafka.html">Kafka</a> — the data plane managed by this operator</li>
+      <li><a href="/tools/mirrormaker2.html">MirrorMaker 2</a> — DR-only KafkaMirrorMaker2 CR also managed by Strimzi</li>
+      <li>ADR-0017 (Kafka DC/DR via MirrorMaker 2)</li>
+      <li><a href="https://strimzi.io/docs/operators/latest/">Upstream Strimzi docs</a> · <a href="https://github.com/strimzi/strimzi-kafka-operator">strimzi-kafka-operator</a></li>
     </ul>
   </section>
 

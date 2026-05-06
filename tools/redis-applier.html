@@ -117,30 +117,55 @@
     <p>End-to-end DR test passed 2026-05-05: a write to DC Redis appeared in DR Redis after the MM2 hop and a redis-applier re-apply on the DR side, validating ADR-0018.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <pre class="ascii-art">
+DC                                          DR
+──                                          ──
+App ──produce──▶ Kafka(redis-writes)        Kafka(redis-writes, mirrored)
+                       │                           │
+                       │ consumer-group            │ consumer-group
+                       │ "redis-applier"           │ "redis-applier"
+                       ▼                           ▼
+                  redis-applier (3 pods)      redis-applier (3 pods)
+                       │ partition-affined         │
+                       ▼                           ▼
+                  Redis (RedisFailover)       Redis (RedisFailover)</pre>
+    <p>3-pod Deployment per cluster running the custom Go binary at <code>nexus.apps.sub.comptech-lab.com/redis-applier:0.1.1</code> (distroless, ~16.9 MB). Each pod joins the <code>redis-applier</code> consumer group on the local Kafka broker; partitions are auto-balanced across the 3 pods. Each consumed message is decoded and applied to the local Sentinel-fronted Redis primary.</p>
+    <p>Cross-cluster durability is automatic: DC writes hit DC Kafka, MirrorMaker 2 mirrors them to DR Kafka, DR's redis-applier consumes and applies to DR Redis. <strong>Apps NEVER write directly to Redis</strong> — that bypasses the WAL.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/redis/applier/</code> — Deployment + Service + KafkaUser (SCRAM-SHA-512 against the internal scram listener on port 9095). Auth secret is derived from the KafkaUser CR's generated Secret.</p>
+    <p>Image: <code>nexus.apps.sub.comptech-lab.com/redis-applier:0.1.1</code>. Build path: <code>scripts/redis/redis-applier</code> in the lab repo (Go 1.22+, podman build, <code>ctr import</code> on rke2 nodes; pushed to in-cluster Nexus).</p>
+    <p><strong>v0.1.1 fix</strong>: <code>kgo.OnPartitionsAssigned</code> hook flips <code>/readyz</code> as soon as the consumer joins the group — v0.1.0 only flipped after the first consumed message, which made fresh deployments look perpetually NotReady.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Pod state</strong>: <code>kubectl -n redis get deploy redis-applier</code></li>
+      <li><strong>Consumer-group state</strong>: <code>kubectl -n kafka exec kafka-broker-0 -- bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group redis-applier</code></li>
+      <li><strong>Lag</strong>: same command — LAG column. Steady state should be near 0.</li>
+      <li><strong>Logs</strong>: <code>kubectl -n redis logs -l app=redis-applier --tail=100 -f</code></li>
+      <li><strong>Image rebuild</strong>: see <code>scripts/redis/redis-applier/README.md</code> in the lab repo.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>End-to-end test PASSED 2026-05-05 11:21: a write produced to DC Kafka <code>redis-writes</code> appeared in DR Redis within seconds — Kafka MM2 lag + applier batch interval. ADR-0018's pattern validated.</p>
+    <p>If DC's redis-applier is down, DR Kafka still mirrors fine; DR's applier writes the latest state to DR Redis. When DC's applier returns, it catches up from its consumer-group offset.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/redis.html">Redis</a> — the destination data plane</li>
+      <li><a href="/tools/kafka.html">Kafka</a> + <a href="/tools/mirrormaker2.html">MirrorMaker 2</a> — the WAL carrier</li>
+      <li><a href="/tools/nexus.html">Nexus</a> — image registry</li>
+      <li>ADR-0018 (Redis via Kafka WAL) — full design rationale</li>
     </ul>
   </section>
 

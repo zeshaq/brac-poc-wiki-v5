@@ -115,30 +115,56 @@
     <p>MM2 runs only on DR by design — it pulls from DC's bootstrap and writes into the local DR Kafka. This is the carrier for the Redis WAL pattern (ADR-0018): app writes go to DC Redis, are journaled to DC Kafka, replicated by MM2 to DR Kafka, then applied to DR Redis by <a href='/tools/redis-applier.html'>redis-applier</a>.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <pre class="ascii-art">
+DC Kafka                                     DR Kafka
+────────                                     ────────
+broker-{0,1,2}                               broker-{0,1,2}
+  topic redis-writes (12 parts, RF 3)           topic redis-writes (auto-created by MM2)
+       │
+       │  source connector pulls
+       ▼
+                          MirrorMaker 2 (Kafka Connect, 2 replicas)
+                          KafkaMirrorMaker2 CR `mm2` in DR's kafka ns
+                          ├─ MirrorSourceConnector  (DC → DR data plane)
+                          ├─ MirrorCheckpointConnector (offset/group state)
+                          └─ MirrorHeartbeatConnector  (liveness probe)
+       │
+       └─ writes to DR ──▶ topic redis-writes (mirrored from DC)</pre>
+    <p>MM2 runs as a Kafka Connect cluster (2 pods) managed by a <code>KafkaMirrorMaker2</code> CR in DR. It reads from DC over the external Kafka listener (SCRAM-SHA-512 over TLS) using a dedicated <code>mm2</code> KafkaUser; topic-level replication is one-directional (DC → DR) by design. Heartbeat + checkpoint connectors ride alongside so consumer-group offsets translate cleanly across clusters.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/dr/manifests/kafka/kafka-mirrormaker2.yaml</code> (CR), <code>clusters/dr/manifests/kafka/users/mm2.yaml</code> (DR-side KafkaUser for connecting back to DR Kafka), and <code>clusters/dc/manifests/kafka/users/mm2.yaml</code> (DC-side KafkaUser for the Connect cluster's source endpoint).</p>
+    <p>Source bootstrap: <code>bootstrap.kafka.apps.sub.comptech-lab.com:443</code> (edge SNI passthrough). TLS via the DC cluster CA (<code>kafka-cluster-ca-cert</code>). Auth: SCRAM-SHA-512 with DC's <code>mm2</code> KafkaUser credentials, copied into DR as a Secret.</p>
+    <p>Topics replicated: <code>redis-writes</code> (and any other future user topics). Connect's internal topics live in DR.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Status</strong>: <code>kubectl -n kafka get kafkamirrormaker2 mm2 -o yaml | yq .status</code> shows connector states.</li>
+      <li><strong>Lag</strong>: <code>kubectl -n kafka exec kafka-broker-0 -- bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group mm2-...</code></li>
+      <li><strong>Restart connectors</strong>: <code>kubectl -n kafka annotate kafkamirrormaker2 mm2 strimzi.io/restart=true</code></li>
+      <li><strong>Pause replication</strong> (e.g. while DC is going through a maintenance window with non-replicatable changes): set <code>spec.connectors.<name>.pause: true</code> on the CR.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>If DC dies, MM2 stops replicating (source unreachable). DR Kafka keeps serving its already-replicated data. After DC recovery, MM2 resumes from the last successful offset — no manual intervention if the lag is within retention (default 7d).</p>
+    <p>If DR is the new primary (and DC is being rebuilt), the direction reverses conceptually but currently we don't run MM2 in the DC → DR mode dynamically; rebuilding DC means pulling from DR via a one-shot connector or by replaying from MinIO snapshots (per ADR-0017's recovery flow).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/kafka.html">Kafka</a> — both source and destination data plane</li>
+      <li><a href="/tools/redis-applier.html">redis-applier</a> — the consumer of the replicated <code>redis-writes</code> topic on DR</li>
+      <li>ADR-0017 (Kafka DC/DR via MirrorMaker 2), ADR-0018 (Redis via Kafka WAL)</li>
+      <li><a href="https://kafka.apache.org/documentation/#georeplication">Kafka geo-replication design</a> · <a href="https://strimzi.io/docs/operators/latest/full/configuring.html#cluster-create-mirror-maker2-str">Strimzi MM2 docs</a></li>
     </ul>
   </section>
 

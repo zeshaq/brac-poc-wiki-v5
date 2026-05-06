@@ -114,30 +114,38 @@
     <p>Used for ad-hoc Redis inspection during demos and incident response. Authenticates against the in-cluster Redis Sentinel-managed primary.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Single-replica Deployment per cluster, raw manifests (no Helm chart). PVC for the persistent settings/connection store (so saved DB connections survive pod restarts). nginx-ingress at the cluster level + Let's Encrypt cert via cert-manager + DNS-01.</p>
+    <p>A bootstrap Job auto-creates the Redis connection in RedisInsight on first deploy via its REST API (<code>POST /api/databases</code>), so you don't have to click through the UI. The Job is annotated as a <code>PostSync</code> hook so it runs after Argo materialises the deployment.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/redisinsight/</code> — Namespace + Deployment + Service + Ingress + Certificate + PVC + bootstrap Job + ConfigMap.</p>
+    <p>Connection profile (added by the bootstrap Job): host <code>rfs-redis.redis.svc.cluster.local</code> (Sentinel-aware, port 26379), master name <code>redis-master</code>, no auth (matches the RedisFailover CR).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://redisinsight.apps.sub.comptech-lab.com</code> on whichever cluster is fronted (each cluster has its own; via wildcard DNS + edge HAProxy SNI default to RKE2 ingress).</li>
+      <li><strong>Reset settings</strong>: <code>kubectl -n redisinsight delete pvc redisinsight</code> + restart pod — bootstrap Job will re-add the default connection.</li>
+      <li><strong>Smoke test</strong>: <code>curl -k https://redisinsight.apps.sub.comptech-lab.com/api/health</code> → 200.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Each cluster has its own. There's no edge HAProxy <code>redisinsight-rke2-be</code> wired today — the DNS wildcard + HAProxy SNI default forward to whichever cluster's ingress responds. With both clusters running, DC's takes the wildcard match. If DC's pod fails, the SNI doesn't auto-fail over to DR (no <code>backup</code> backend wired). Wiring is on the Plan-09 list.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/redis.html">Redis</a> — the inspected data plane</li>
+      <li><a href="/tools/redis-operator.html">Redis operator</a> — Sentinel topology that RedisInsight talks to</li>
+      <li><a href="https://redis.io/docs/latest/operate/redisinsight/">RedisInsight upstream docs</a></li>
     </ul>
   </section>
 
