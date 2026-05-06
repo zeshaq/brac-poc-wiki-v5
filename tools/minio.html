@@ -121,30 +121,52 @@
     <p>As of 2026-05-06 it also acts as the carrier for <a href="/tools/vault.html">Vault</a> cross-cluster sync: DC's <code>vault-replicator-export</code> CronJob ships a logical-export tarball to <code>vault-snapshots-logical/dc/</code> hourly, DR's import CronJob fetches <code>latest.tar.gz</code> every 4 h and replays into DR Vault. The original <code>vault-snapshots</code> Raft-snapshot bucket plan was abandoned because per-cluster Shamir keyrings can't decrypt each other's master keys (see <a href="/tools/vault.html">Vault page</a>).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Single MinIO Community server on a dedicated VM at <code>30.30.30.14</code>. Storage is a single Longhorn-style local disk pool (no erasure coding, single drive) — sufficient for the POC's small object footprint. S3-compatible API on port 9000, web console on 9001. Both ports are exposed via the edge HAProxy as <code>minio.apps.sub.comptech-lab.com</code> and <code>minio-console.apps.sub.comptech-lab.com</code>.</p>
+    <p>MinIO is intentionally outside both clusters so it remains reachable regardless of which side of DC/DR is current — for cross-cluster artefacts (Vault logical replication, Terrakube state, future backups) we need a stable S3 endpoint.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Server config in MinIO env files on the VM (root creds at <code>~/cloud-init/minio-root-password</code>, chmod 600). Bucket-level configuration (versioning, lifecycle, anonymous access, service-account policies) is done via <code>mc</code> client.</p>
+    <p>Service accounts and policies (managed via <code>mc admin user/policy</code>):</p>
+    <ul>
+      <li><code>vault-replicator-dc</code> with policy <code>vault-replicator-dc-export</code> (PUT/GET/DELETE on <code>vault-snapshots-logical/dc/*</code>)</li>
+      <li><code>vault-replicator-dr</code> with policy <code>vault-replicator-dr-import</code> (GET on <code>vault-snapshots-logical/dc/*</code>)</li>
+      <li><code>terrakube</code> — for Terrakube state, secret at <code>~/cloud-init/minio-terrakube-secret-key</code></li>
+      <li><code>oadp</code> — placeholder for future OADP backups, creds at <code>~/cloud-init/minio-oadp-credentials</code></li>
+      <li><code>signoz</code> — for SigNoz cold-storage future use, creds at <code>~/cloud-init/minio-signoz-credentials</code></li>
+    </ul>
+    <p>Anonymous-read on <code>vault-replicator-tools</code> bucket is intentional — pods need to fetch the mc + jq + libonig binaries without SigV4 auth (they don't have mc yet at that point). Set via <code>mc anonymous set download lab/vault-replicator-tools</code>.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Console</strong>: <code>https://minio-console.apps.sub.comptech-lab.com</code> — login as <code>zahid</code> with the root password.</li>
+      <li><strong>mc client setup</strong>: <code>mc alias set lab http://30.30.30.14:9000 zahid &lt;root-pwd&gt;</code></li>
+      <li><strong>List buckets</strong>: <code>mc ls lab/</code></li>
+      <li><strong>Inspect a tarball</strong>: <code>mc cat lab/vault-snapshots-logical/dc/latest.tar.gz | tar tz</code></li>
+      <li><strong>Bucket lifecycle</strong>: <code>mc ilm rule ls lab/&lt;bucket&gt;</code> shows current rules; add via <code>mc ilm rule add</code>.</li>
+      <li><strong>Service-account audit</strong>: <code>mc admin user ls lab/</code> + <code>mc admin policy entities lab --user &lt;name&gt;</code></li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Single VM, single point of failure for any data that lives only in MinIO (Terrakube remote state, Vault logical-replication tarballs). Mitigation today: KVM snapshot of the VM. There is no MinIO secondary or active-active replication wired.</p>
+    <p>If MinIO dies during a Vault failover-promotion window, DR's Vault import CronJob will fail (mc cp times out); operators should fall back to manual data replay from any cached tarball.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li>Cloud-init seed at <code>~/cloud-init/minio/</code> + bootstrap script <code>~/cloud-init/scripts/create-minio-vm.sh</code></li>
+      <li>Service-account creds: <code>~/cloud-init/minio-vault-replicator-credentials</code>, <code>~/cloud-init/minio-terrakube-secret-key</code>, <code>~/cloud-init/minio-oadp-credentials</code>, <code>~/cloud-init/minio-signoz-credentials</code></li>
+      <li><a href="/tools/vault.html">Vault</a> — primary user of <code>vault-snapshots-logical</code></li>
+      <li><a href="/tools/terrakube.html">Terrakube</a> — primary user of <code>terrakube-state</code></li>
+      <li><a href="https://min.io/docs/minio/linux/index.html">MinIO docs</a></li>
     </ul>
   </section>
 

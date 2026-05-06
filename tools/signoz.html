@@ -114,30 +114,43 @@
     <p>Used for traces and metrics from in-cluster workloads. The cosmetic OutOfSync in Argo CD is the K8s API-server adding default fields (schedulerName, dnsPolicy, terminationGracePeriodSeconds, etc.) that aren't in the source manifests; functionally the install is healthy.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Per-cluster install. Components: <code>frontend</code> (the SigNoz web UI, Apache nginx serving the React SPA), <code>query-service</code> (Go backend reading from ClickHouse), <code>otel-collector</code> + <code>otel-collector-metrics</code> (OpenTelemetry receivers + processors writing into ClickHouse), and a single-node <code>clickhouse</code> StatefulSet on Longhorn.</p>
+    <p>The "no ZK" profile drops Zookeeper that the older SigNoz layouts required for ClickHouse coordination — single-node ClickHouse doesn't need it. We had a previous deploy with ZK that left orphan ConfigMaps; Argo's diff against those is the source of the cosmetic OutOfSync (MR #7-#8).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/signoz/</code> — raw manifests adapted from the SigNoz Helm chart values, simplified for the lab's single-node ClickHouse.</p>
+    <p>Receivers exposed: OTLP gRPC (4317), OTLP HTTP (4318), Jaeger Thrift (14268). Apps in the cluster send traces and metrics by setting <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> at <code>http://otel-collector.signoz:4317</code>.</p>
+    <p>No OIDC integration today — the SigNoz UI uses its own user database. Auth-via-Keycloak is on the wishlist.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://signoz.apps.sub.comptech-lab.com</code> on whichever cluster is fronted; per-cluster instances with no DC-primary/DR-backup edge backend yet.</li>
+      <li><strong>ClickHouse direct query</strong>: <code>kubectl -n signoz exec clickhouse-0 -- clickhouse-client --query "SHOW TABLES FROM signoz_traces"</code></li>
+      <li><strong>Inspect collector receiver health</strong>: <code>kubectl -n signoz logs deploy/otel-collector | head</code></li>
+      <li><strong>Send a test trace</strong>: <code>otelgen</code> or any otel-cli pointed at the OTLP endpoint inside the cluster.</li>
+      <li><strong>Cosmetic OOS</strong>: ignore until Phase R-E; functional impact is zero. Either add a global <code>resource.customizations.ignoreDifferences</code> in <code>argocd-cm</code> for StatefulSet/Deployment/Pod default fields, OR per-app <code>ignoreDifferences</code> blocks. MR #37/#38 attempted server-side diff fixes that didn't fully clear the badges.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Per-cluster — no cross-cluster trace/metric replication. If DC dies, the trace history living in DC's ClickHouse goes with it (until VM-level recovery). DR's SigNoz only has traces from DR-side workloads.</p>
+    <p>No edge HAProxy backend wired. Plan-09 candidate.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/signoz">GitOps: <code>clusters/dc/manifests/signoz/</code></a></li>
+      <li>MR #7-#8 (no-ZK rollout)</li>
+      <li>ADR-0013 (SigNoz on spoke-dc — historical RHACM context, unrelated to RKE2 lab)</li>
+      <li><a href="https://signoz.io/docs/">SigNoz docs</a> · <a href="https://opentelemetry.io/docs/">OpenTelemetry</a></li>
     </ul>
   </section>
 

@@ -115,30 +115,53 @@
     <p>Wildcard <code>*.apps.sub.comptech-lab.com → 160.30.63.134</code> covers the bulk of the platform. Explicit A records exist where wildcards don't synthesise (e.g. <code>*.kafka.apps.sub.comptech-lab.com</code> needs <code>bootstrap.kafka...</code> and <code>broker-{0,1,2}.kafka...</code> records explicitly because of RFC 4592 single-label matching).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Single PowerDNS Authoritative server on the <code>pdns</code> VM at <code>160.30.63.133</code>. Backend is sqlite3 (<code>gsqlite3</code> launch backend, DB at <code>/var/lib/powerdns/pdns.sqlite3</code>). Cloudflare delegates the <code>sub.comptech-lab.com</code> zone here via NS records; Cloudflare itself is authoritative for the parent domain.</p>
+    <p>Two listening hostnames: <code>ns1.sub.comptech-lab.com</code> and <code>ns2.sub.comptech-lab.com</code> — both currently resolve to the same VM (no DR). The intra-cluster IP <code>30.30.30.0</code> (yes, the network address) is also the VM's br30 IP — moved from <code>30.30.30.1</code> on 2026-04-29 because it collided with HAProxy. Quirky but valid (RFC 1812).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Server config: <code>/etc/powerdns/pdns.conf</code> on the VM. API key for the cert-manager-webhook-pdns lives at <code>~/cloud-init/pdns-api-key</code> (chmod 600). Records are managed via the API for ACME challenges, and via <code>sqlite3</code> directly for static A records (<code>UPDATE records SET ...</code> + bump the SOA serial).</p>
+    <p>Current zone (post 2026-05-06 round of cleanups):</p>
+    <ul>
+      <li>Wildcard <code>*.apps.sub.comptech-lab.com → 160.30.63.134</code> (haproxy)</li>
+      <li>Wildcard <code>*.dr.apps.sub.comptech-lab.com → 160.30.63.138</code> (rke2-dr nginx-ingress passthrough)</li>
+      <li>Explicit A records: <code>argocd.apps</code>, <code>awx.apps</code>, <code>gitlab.apps</code>, <code>terrakube.apps</code>, <code>terrakube-{api,reg}.apps</code>, <code>bootstrap.kafka.apps</code>, <code>broker-{0,1,2}.kafka.apps</code> — all pointing at <code>160.30.63.134</code></li>
+      <li>NS + SOA for the zone; <code>ns1</code> / <code>ns2</code> A records → <code>160.30.63.133</code></li>
+    </ul>
+    <p>Why explicit records when wildcard exists: DNS wildcard matches a single label per RFC 4592, so <code>*.apps</code> doesn't synthesise <code>broker-2.kafka.apps</code>; plus the existence of any subdomain of <code>kafka.apps</code> (an empty-non-terminal) blocks wildcard synthesis at <code>broker-2.kafka.apps</code> too.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Add an A record</strong>:
+<pre>ssh ze@pdns 'sudo sqlite3 /var/lib/powerdns/pdns.sqlite3 \
+  "INSERT INTO records(domain_id,name,type,content,ttl) \
+   SELECT id,\"foo.apps.sub.comptech-lab.com\",\"A\",\"160.30.63.134\",300 FROM domains WHERE name=\"sub.comptech-lab.com\"; \
+   UPDATE records SET content=REPLACE(content,\"&lt;old serial&gt;\",\"&lt;new serial&gt;\") \
+   WHERE type=\"SOA\" AND name=\"sub.comptech-lab.com\";"
+sudo pdns_control purge'</pre></li>
+      <li><strong>List zone</strong>: <code>ssh ze@pdns 'sudo sqlite3 /var/lib/powerdns/pdns.sqlite3 "SELECT name,type,content FROM records ORDER BY name;"'</code></li>
+      <li><strong>Test from outside</strong>: <code>dig @160.30.63.133 +short &lt;name&gt; A</code></li>
+      <li><strong>Purge response cache after a manual edit</strong>: <code>sudo pdns_control purge</code></li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>None today — single PowerDNS server. If the VM dies, the zone goes dark for everything past the wildcard's TTL (default 300 s).</p>
+    <p>Cloudflare's authoritative entry for <code>sub.comptech-lab.com</code> delegates here, so client-side resolution stops working. Mitigation: KVM snapshot of the VM + sqlite DB backup; rebuild path is <code>create-pdns-vm.sh + restore pdns.sqlite3</code>.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li>API key: <code>~/cloud-init/pdns-api-key</code> (chmod 600)</li>
+      <li><a href="/tools/webhook-pdns.html">cert-manager-webhook-pdns</a> — automated TXT record writer</li>
+      <li><a href="https://doc.powerdns.com/authoritative/">PowerDNS Authoritative docs</a> · <a href="https://datatracker.ietf.org/doc/html/rfc4592">RFC 4592 (DNS wildcards)</a></li>
     </ul>
   </section>
 

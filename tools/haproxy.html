@@ -106,8 +106,10 @@
     <dl class="meta meta-grid">
       <dt>Form</dt><dd>VM on <code>br30</code></dd>
       <dt>Failover model</dt><dd><code>backup</code> keyword per backend (DC primary, DR backup)</dd>
-      <dt>Wired backends</dt><dd>vault-rke2, auth (Keycloak), terrakube-{ui,api,reg}, awx</dd>
-      <dt>Pending backends</dt><dd>SigNoz, Nexus, Jenkins, RedisInsight, Kafka</dd>
+      <dt>DC-primary/DR-backup backends</dt><dd><code>vault-rke2</code>, <code>keycloak</code>, <code>terrakube-{ui,api,reg}</code>, <code>awx</code>, <code>kafka</code> (SNI passthrough for bootstrap + 3 brokers)</dd>
+      <dt>VM backends</dt><dd><code>gitlab</code> (.5), <code>poc-overview</code> (.130), <code>minio-{api,console}</code> (.14)</dd>
+      <dt>Pending DC/DR backends</dt><dd>Nexus, Jenkins, RedisInsight, SigNoz</dd>
+      <dt>External IP</dt><dd><code>160.30.63.134</code> (br-vm) for app traffic; <code>160.30.63.138</code> for the dr.apps subdomain passthrough</dd>
     </dl>
   </section>
 
@@ -116,30 +118,61 @@
     <p>All <code>*.apps.sub.comptech-lab.com</code> hostnames resolve to the HAProxy VM, which fans out to the DC and DR cluster ingress controllers. DC/DR cutover is performed here — there is no DNS movement during failover; clients see at most a single TCP retry.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <pre class="ascii-art">
+External (160.30.63.134:443)
+  │
+  ├─ frontend public-apps-http  (port 80)
+  │   ├─ ACL is_vm_host  → 301 redirect to https
+  │   └─ default → public-apps-http-be (rke2-{1,2,3}:80)
+  │
+  ├─ frontend public-apps-https (port 443, TCP/SNI mode)
+  │   ├─ SNI gitlab.apps        → vm-tls-be → gitlab-vm-be
+  │   ├─ SNI minio*.apps        → vm-tls-be → minio-{api,console}-vm-be
+  │   ├─ SNI poc-overview.apps  → vm-tls-be → poc-overview-vm-be
+  │   ├─ SNI haproxy.apps       → vm-tls-be → haproxy-self-be
+  │   ├─ SNI vault-rke2.apps    → vm-tls-be → vault-rke2-be (DC + DR backup)
+  │   ├─ SNI auth.apps          → vm-tls-be → keycloak-rke2-be
+  │   ├─ SNI terrakube-{ui,api,reg}.apps → terrakube-*-rke2-be
+  │   ├─ SNI awx.apps           → vm-tls-be → awx-rke2-be
+  │   ├─ SNI bootstrap.kafka.apps / broker-{0,1,2}.kafka.apps → kafka-rke2-be (TCP passthrough; clients do SCRAM_SSL to brokers)
+  │   └─ default                → public-apps-https-be (rke2-{1,2,3}:443) ← catch-all for un-named SNI
+  │
+  └─ frontend public-apps-dr-{http,https} (160.30.63.138, dr.apps.* passthrough to rke2-dr nodes)</pre>
+    <p>The pattern: VM-hosted services keep their own TLS terminator inside HAProxy (<code>vm-tls-be → frontend vm-tls</code> on 127.0.0.1:8443); cluster-hosted services pass SNI through to the cluster's nginx-ingress which terminates TLS itself.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source of truth: <code>/etc/haproxy/haproxy.cfg</code> on the haproxy VM. Edits are applied by SCP-ing the new cfg, running <code>haproxy -c -f /etc/haproxy/haproxy.cfg</code> to validate, then <code>systemctl reload haproxy</code>. Backups land at <code>/etc/haproxy/haproxy.cfg.bak.&lt;timestamp&gt;.&lt;reason&gt;</code> — there are dozens; the most recent are pre-vm-decom (2026-05-05) and pre-kafka-sni (2026-05-06).</p>
+    <p>HAProxy itself runs on Ubuntu 24.04 in <code>/usr/sbin/haproxy</code> as systemd service <code>haproxy.service</code>. The local TLS terminator on 8443 uses the wildcard cert at <code>/etc/haproxy/certs/wildcard-apps.pem</code> (LE-issued, manual renewal — it's the only cert HAProxy itself owns).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Stats / control socket</strong>: <code>echo "show stat" | sudo socat stdio /run/haproxy/admin.sock</code></li>
+      <li><strong>Force a server into maintenance</strong>: <code>echo "set server &lt;backend&gt;/&lt;server&gt; state maint" | sudo socat stdio /run/haproxy/admin.sock</code></li>
+      <li><strong>Validate a new cfg before reload</strong>: <code>sudo haproxy -c -f /etc/haproxy/haproxy.cfg</code></li>
+      <li><strong>Reload</strong>: <code>sudo systemctl reload haproxy</code> — graceful, in-flight connections finish.</li>
+      <li><strong>Self-page (HAProxy reachable check)</strong>: <code>curl -sk https://haproxy.apps.sub.comptech-lab.com/</code> hits the embedded nginx on the VM (<code>haproxy-self-be</code>).</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>HAProxy itself is single-VM. If the VM dies the whole edge goes dark. Mitigation: KVM snapshot of the VM + the haproxy.cfg backups in <code>/etc/haproxy/</code>; rebuild path is "create-haproxy-vm.sh + restore haproxy.cfg".</p>
+    <p>For backends, the failover model is per-backend <code>backup</code> keyword: each <code>*-rke2-be</code> backend has DC <code>30.30.30.{2,3,4}:80</code> as primary servers and DR <code>30.30.31.{1,2,3}:80</code> (or :443 for kafka SNI) as <code>backup</code> servers. Health-check intervals: 2 s for vault, 5 s for keycloak/terrakube/awx, fall=3 (so failover triggers after 6-15 s of failed checks).</p>
+    <p>Smoke results (all 2026-05-04 / 2026-05-05): Vault 9 s / 30 s, Keycloak 13 s / 18 s, Terrakube 16 s / 65 s, AWX 14 s / 42 s, Kafka L4 instant on broker-pod death.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li>Cloud-init seed at <code>~/cloud-init/haproxy/</code> (ISO-build artefacts; not the running cfg)</li>
+      <li>Plan-09 catalogue: SigNoz, Nexus, Jenkins, RedisInsight backends still pending</li>
+      <li><a href="https://docs.haproxy.org/2.8/configuration.html">HAProxy 2.8 config reference</a></li>
     </ul>
   </section>
 
