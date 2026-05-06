@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Splunk — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+<a class="brand-link" href="/">
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
+  </div>
+</div>
+</a>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity &amp; secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+    <a href="/tools/external-secrets.html">External Secrets Operator</a>
+    <a href="/tools/wso2is.html">WSO2 Identity Server (apps)</a>
+    <a href="/tools/wso2-apim.html">WSO2 API Manager (apps)</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/redis.html">Redis</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD &amp; IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+    <a href="/tools/splunk.html" class="active" aria-current="page">Splunk</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Security</div>
+    <a href="/tools/trivy.html">Trivy Operator</a>
+    <a href="/tools/defectdojo.html">DefectDojo</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network &amp; shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="sidebar-foot">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light/dark theme">
+    <span class="theme-toggle-icon" aria-hidden="true">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="theme-toggle-label"></span>
+  </button>
+  <div class="footer-note">v5 · live snapshot</div>
+</div>
+</aside>
+
+<main id="main" class="content">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Catalogue</a> <span class="sep">/</span>
+    <span>Observability</span> <span class="sep">/</span>
+    <span class="current">Splunk</span>
+  </nav>
+
+  <header class="page-header">
+    <div class="kicker">Observability</div>
+    <h1>Splunk</h1>
+    <div class="badges"><span class="badge dc">DC</span></div>
+    <p class="lede">Single Splunk Enterprise Standalone instance with the <strong>Splunk Free</strong> license, deployed via the Splunk Operator on RKE2 DC for ad-hoc log testing.</p>
+  </header>
+
+  <section class="card">
+    <h2>Quick facts</h2>
+    <dl class="meta meta-grid">
+      <dt>Chart</dt><dd><code>splunk-enterprise 3.1.0</code> from <a href="https://splunk.github.io/splunk-operator/">splunk.github.io/splunk-operator</a> &mdash; bundles the operator subchart and creates a <code>Standalone</code> CR via templates</dd>
+      <dt>Operator</dt><dd><code>splunk/splunk-operator:3.1.0</code></dd>
+      <dt>Operand image</dt><dd><code>docker.io/splunk/splunk:10.0.0</code></dd>
+      <dt>License group</dt><dd><code>Free</code> (500 MB/day indexing cap, no clustering)</dd>
+      <dt>Web UI</dt><dd><code>https://splunk.apps.sub.comptech-lab.com</code></dd>
+      <dt>Storage</dt><dd>Longhorn RWO &mdash; etc 5 GiB, var 20 GiB</dd>
+      <dt>Resources</dt><dd>requests 500m / 2 GiB &middot; limits 2 CPU / 4 GiB</dd>
+      <dt>State</dt><dd>DC only &middot; Standalone phase=Ready &middot; pod 1/1 Running &middot; web HTTP 303</dd>
+      <dt>Deployed</dt><dd>2026-05-06 (Phase 7 v0.1)</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p>A single all-in-one Splunk Enterprise instance running with the Splunk Free license &mdash; capped at 500 MB/day of indexed data, no clustering, no scheduled searches, no alerting. Useful for &ldquo;spin up, kick the tyres, search some logs&rdquo; workflows; not for any production load. SigNoz remains the cluster&rsquo;s primary observability backend.</p>
+    <p>The instance lands as a <code>Standalone</code> custom resource managed by the <strong>Splunk Operator for Kubernetes</strong>, which provisions the underlying StatefulSet, two Longhorn-backed PVCs (one for <code>/opt/splunk/etc</code> config, one for <code>/opt/splunk/var</code> indexes), and a service exposing the Web UI (8000), HEC ingest (8088), management REST (8089), and the forwarder receiver (9997).</p>
+  </section>
+
+  <section class="card">
+    <h2>Architecture</h2>
+    <p>One <code>Standalone</code> CR named <code>stdln</code> in namespace <code>splunk</code>. The operator reconciles it into a single-replica StatefulSet <code>splunk-stdln-standalone</code>, a headless service <code>splunk-stdln-standalone-headless</code>, and a regular service <code>splunk-stdln-standalone-service</code>. The StatefulSet pulls <code>splunk/splunk:10.0.0</code> and runs <em>splunk-ansible</em> at first boot to render <code>default.yml</code> into the canonical config.</p>
+    <p><strong>Free license + admin password</strong> arrive through <code>spec.defaultsUrl: /mnt/splunk-defaults/default.yml</code> on the Standalone CR, which mounts an imperative Kubernetes Secret <code>splunk-default-yaml</code> containing:</p>
+<pre><code>splunk:
+  license_uri: Free
+  password: &lt;random 22-char alphanumeric&gt;</code></pre>
+    <p>The Secret is <strong>not in git</strong> (master copy at <code>~/cloud-init/splunk-admin-password</code>, chmod 600 on dl385). Same imperative-Secret posture as DefectDojo. v0.2 swaps this for an <code>ExternalSecret</code> pulling from Vault <code>secret/apps/splunk/*</code>.</p>
+    <p><strong>Volume name caveat</strong>: the operator auto-mounts its own internal Secret at <code>/mnt/splunk-secrets</code> (volume name <code>mnt-splunk-secrets</code>). User-defined volumes are mounted at <code>/mnt/&lt;volumeName&gt;</code>, so naming the user volume <code>splunk-secrets</code> collides with the operator&rsquo;s mount. Ours is named <code>splunk-defaults</code> and mounts at <code>/mnt/splunk-defaults</code>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Configuration</h2>
+    <p>Source: chart <code>splunk-enterprise</code> 3.1.0 from <code>https://splunk.github.io/splunk-operator/</code>, with values from <code>shared/helm-values/splunk.yaml</code> + <code>clusters/dc/values/splunk.yaml</code>. Argo Application <code>splunk</code> at sync wave 12.</p>
+    <p><strong>CRDs are not in the chart.</strong> Splunk publishes the operator CRDs as a <a href="https://github.com/splunk/splunk-operator/releases/download/3.1.0/splunk-operator-crds.yaml">separate release artifact</a> (11 CRDs: <code>Standalone</code>, <code>ClusterManager</code>, <code>IndexerCluster</code>, <code>SearchHeadCluster</code>, <code>MonitoringConsole</code>, <code>LicenseManager</code>, <code>IngestorCluster</code>, <code>ObjectStorage</code>, <code>Queue</code>, plus deprecated <code>ClusterMaster</code> / <code>LicenseMaster</code>). Applied out-of-band with <code>kubectl apply --server-side -f splunk-operator-crds.yaml</code>.</p>
+    <p>The operator&rsquo;s mandatory <strong>Splunk General Terms</strong> acknowledgment is set in chart values: <code>splunk-operator.splunkOperator.splunkGeneralTerms: --accept-sgt-current-at-splunk-com</code>.</p>
+    <p>Ingress is provisioned via the chart&rsquo;s <code>extraManifests</code> at host <code>splunk.apps.sub.comptech-lab.com</code> &rarr; <code>splunk-stdln-standalone-service:8000</code> on the cluster <code>nginx</code> ingress class. No edge HAProxy backend stanza is needed &mdash; it falls through the existing <code>public-apps-https-be</code> wildcard to the RKE2 nodes, like other cluster apps.</p>
+  </section>
+
+  <section class="card">
+    <h2>Operations</h2>
+    <ul>
+      <li><strong>Web UI</strong>: <code>https://splunk.apps.sub.comptech-lab.com</code> &middot; admin password at <code>~/cloud-init/splunk-admin-password</code> (chmod 600 on dl385). HTTP 303 (redirect to login) is the expected pre-login response.</li>
+      <li><strong>Verify license</strong>: <code>kubectl -n splunk exec splunk-stdln-standalone-0 -- /opt/splunk/bin/splunk list licenser-groups -auth admin:&lt;pw&gt;</code> &mdash; should show <code>Free is_active:1</code>.</li>
+      <li><strong>Forwarder receiver</strong>: port 9997 is exposed in the Service but no edge HAProxy TCP frontend is wired today. v0.2 adds it if external forwarders are needed.</li>
+      <li><strong>Sending events via HEC</strong>: port 8088 on the service. Token must be created in the Splunk UI first. No data-plane wiring yet &mdash; purely for ad-hoc testing.</li>
+      <li><strong>Pull friction</strong>: the <code>splunk:10.0.0</code> image is ~1.7 GB compressed and the lab outbound to <code>docker.io</code> is throttled &mdash; first pull on a fresh node takes ~2 hours. <code>ctr image import</code> of a podman-saved tarball <strong>does not bypass</strong> the kubelet pull unless you also tag the manifest digest (<code>ctr image tag &lt;repo&gt;:&lt;tag&gt; &lt;repo&gt;@sha256:&lt;digest&gt;</code>); kubelet&rsquo;s IfNotPresent check requires <code>RepoDigests</code> to match.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Failover</h2>
+    <p><strong>None.</strong> v0.1 is DC-only. Splunk Free is single-instance by design &mdash; clustering and indexer replication are paid features. A DR pair would be two independent Splunks with no cross-cluster index replication unless we wire SmartStore + an S3-compatible object store (deferred &mdash; bigger lift than the v0.1 &ldquo;few tests&rdquo; scope warranted).</p>
+  </section>
+
+  <section class="card">
+    <h2>References</h2>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/blob/main/clusters/dc/apps/splunk.yaml">GitOps: <code>clusters/dc/apps/splunk.yaml</code></a></li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/blob/main/shared/helm-values/splunk.yaml">GitOps: <code>shared/helm-values/splunk.yaml</code></a></li>
+      <li>MR !52 (initial drop) &middot; MR !54 (volume rename to clear <code>/mnt/splunk-secrets</code> collision) &middot; MR !55 (drop <code>Replace=true</code> syncOption &mdash; was breaking PVC immutability)</li>
+      <li><a href="https://splunk.github.io/splunk-operator/">Splunk Operator chart repo</a> &middot; <a href="https://github.com/splunk/splunk-operator">splunk/splunk-operator on GitHub</a> &middot; <a href="https://docs.splunk.com/Documentation/Splunk/latest/Admin/MoreaboutSplunkFree">Splunk Free license docs</a></li>
+    </ul>
+  </section>
+
+  <nav class="page-nav" aria-label="Adjacent tools">
+    <a class="prev" href="/tools/signoz.html" rel="prev">&larr; SigNoz</a>
+    <a class="next" href="/tools/trivy.html" rel="next">Trivy Operator &rarr;</a>
+  </nav>
+
+</main>
+
+<script>
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
+</script>
+<script>
+  (function(){
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
