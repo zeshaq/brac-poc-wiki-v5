@@ -98,21 +98,27 @@
     <div class="kicker">Edge / network & shared</div>
     <h1>MinIO</h1>
     <div class="badges"><span class="badge shared">Shared infra</span></div>
-    <p class="lede">S3-compatible object storage — backs Terrakube remote state and (planned) snapshot buckets.</p>
+    <p class="lede">S3-compatible object storage — backs Terrakube remote state, Vault DC→DR logical replication, and the replicator tool stash.</p>
   </header>
 
   <section class="card">
     <h2>Quick facts</h2>
     <dl class="meta meta-grid">
-      <dt>Form</dt><dd>VM on <code>br30</code></dd>
-      <dt>Buckets (live)</dt><dd><code>terrakube-state</code></dd>
-      <dt>Buckets (planned)</dt><dd><code>vault-snapshots</code>, <code>jenkins-rke2-backups</code>, <code>nexus-blobs</code></dd>
+      <dt>Form</dt><dd>VM on <code>br30</code> (<code>30.30.30.14:9000</code>)</dd>
+      <dt>Buckets (live)</dt><dd>
+        <code>terrakube-state</code>,
+        <code>vault-snapshots-logical</code> (versioned, 14d non-current expiry),
+        <code>vault-replicator-tools</code> (anonymous-read; mc + musl jq + libonig.so.5)
+      </dd>
+      <dt>Buckets (planned)</dt><dd><code>jenkins-rke2-backups</code>, <code>nexus-blobs</code></dd>
+      <dt>Service accounts</dt><dd><code>vault-replicator-dc</code> (PUT/GET/DELETE on <code>vault-snapshots-logical/dc/*</code>), <code>vault-replicator-dr</code> (GET on <code>vault-snapshots-logical/dc/*</code>)</dd>
     </dl>
   </section>
 
   <section class="card">
     <h2>What it is</h2>
-    <p>Used as a stable S3 endpoint outside both clusters so it's available regardless of which side of DC/DR is current. Application object data on the platform itself uses Longhorn PVCs.</p>
+    <p>Stable S3 endpoint outside both clusters so it's available regardless of which side of DC/DR is current. Application object data on the platform itself uses Longhorn PVCs.</p>
+    <p>As of 2026-05-06 it also acts as the carrier for <a href="/tools/vault.html">Vault</a> cross-cluster sync: DC's <code>vault-replicator-export</code> CronJob ships a logical-export tarball to <code>vault-snapshots-logical/dc/</code> hourly, DR's import CronJob fetches <code>latest.tar.gz</code> every 4 h and replays into DR Vault. The original <code>vault-snapshots</code> Raft-snapshot bucket plan was abandoned because per-cluster Shamir keyrings can't decrypt each other's master keys (see <a href="/tools/vault.html">Vault page</a>).</p>
   </section>
 
   <section class="card placeholder">
