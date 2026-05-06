@@ -80,28 +80,25 @@
     <p class="lede">3 Redis + 3 Sentinel pods per cluster — the platform's KV store, fed by the Kafka WAL.</p>
   </header>
 
+  <h2 class="section-rule">Overview</h2>
   <section class="card">
-    <h2>Quick facts</h2>
+    <p>The platform's KV store. Each cluster runs an independent Redis HA pair (one primary, two replicas) fronted by three Sentinels for in-cluster failover. DC and DR are <em>not</em> directly replicated at the Redis layer — instead, Kafka acts as a write-ahead log and the redis-applier replays the WAL into the local Redis primary on each side. The result is two eventually-consistent copies of the same dataset, decoupled at the storage layer but coupled at the streaming layer.</p>
+    <p>This pattern (ADR-0018) was chosen because Redis-native replication across heterogeneous regions is fragile (split-brain, cascading auth, network blips), but Kafka MM2 between two RKE2 clusters is well-understood and already needed for other replication paths.</p>
     <dl class="meta meta-grid">
       <dt>Operator</dt><dd>Spotahome <a href="/tools/redis-operator.html">redis-operator</a> 3.2.13 reconciling a <code>RedisFailover</code> CR</dd>
       <dt>Topology per cluster</dt><dd>3 Redis pods (1 primary + 2 replicas) + 3 Sentinel pods</dd>
       <dt>Persistence</dt><dd>Longhorn-backed PVCs (one per Redis pod)</dd>
       <dt>Failover (within cluster)</dt><dd>Sentinel quorum-driven primary election</dd>
-      <dt>Failover (DC ⟷ DR)</dt><dd>Independent instances; no Redis-native replication. Convergence via Kafka WAL (<a href="https://github.com/example">ADR-0018</a>) replayed by <a href="/tools/redis-applier.html">redis-applier</a> on each side.</dd>
+      <dt>Failover (DC ⟷ DR)</dt><dd>Independent instances; no Redis-native replication. Convergence via Kafka WAL (ADR-0018) replayed by <a href="/tools/redis-applier.html">redis-applier</a> on each side.</dd>
       <dt>Cross-cluster carrier</dt><dd>Kafka topic <code>redis-writes</code>, mirrored DC→DR by <a href="/tools/mirrormaker2.html">MirrorMaker 2</a></dd>
       <dt>Validation</dt><dd>End-to-end DR test PASSED 2026-05-05 — write to DC Redis appeared on DR Redis after the MM2 + applier hop</dd>
     </dl>
   </section>
 
+  <h2 class="section-rule">The Redis layer (per cluster)</h2>
   <section class="card">
-    <h2>What it is</h2>
-    <p>The platform's KV store. Each cluster runs an independent Redis HA pair (one primary, two replicas) fronted by three Sentinels for in-cluster failover. DC and DR are <em>not</em> directly replicated at the Redis layer — instead, Kafka acts as a write-ahead log and the redis-applier replays the WAL into the local Redis primary on each side. The result is two eventually-consistent copies of the same dataset, decoupled at the storage layer but coupled at the streaming layer.</p>
-    <p>This pattern (ADR-0018) was chosen because Redis-native replication across heterogeneous regions is fragile (split-brain, cascading auth, network blips), but Kafka MM2 between two RKE2 clusters is well-understood and already needed for other replication paths.</p>
-  </section>
-
-  <section class="card">
-    <h2>Architecture</h2>
-    <p>Per-cluster, the Redis topology is the standard Spotahome arrangement:</p>
+    <h3>Topology</h3>
+    <p>Per-cluster, the Redis layout is the standard Spotahome <code>RedisFailover</code> arrangement: one primary, two replicas, three Sentinels watching them, plus the local redis-applier consumer (covered in the next section).</p>
     <pre><code>┌── one cluster (DC or DR) ────────────────────────────────┐
 │                                                          │
 │   ┌──────────┐   ┌──────────┐   ┌──────────┐             │
@@ -123,7 +120,42 @@
 │                                                          │
 └──────────────────────────────────────────────────────────┘</code></pre>
 
-    <p>Cross-cluster, the WAL pattern stitches the two halves together:</p>
+    <h3>Setup &amp; configuration</h3>
+    <p>Deployed via Argo CD. Each cluster's app definition under <code>clusters/&lt;dc|dr&gt;/apps/redis/</code> renders a <code>RedisFailover</code> CR that the Spotahome operator reconciles.</p>
+    <ul>
+      <li><strong>Storage:</strong> Longhorn StorageClass; one PVC per Redis pod. Sentinels are stateless.</li>
+      <li><strong>Resources:</strong> Sized for POC traffic; no eviction policy enforced beyond the operator default. <code>maxmemory</code> is left to the OS / PVC capacity for now (see Improvements).</li>
+      <li><strong>AOF / RDB:</strong> Default operator settings. AOF on the primary catches recent writes that have arrived via redis-applier but haven't yet been replicated to replicas.</li>
+      <li><strong>Auth:</strong> No password is enforced inside the namespace today (POC scope). Network reachability is constrained by NetworkPolicies and the cluster ingress posture. Production-equivalent would put a Sentinel-known password in a Secret and reference it in the RedisFailover CR.</li>
+      <li><strong>Cross-namespace plumbing:</strong> redis-applier lives in the <code>redis</code> namespace; it consumes from Kafka in the <code>kafka</code> namespace via SCRAM. Two secrets are bridged across namespaces today (<code>kafka-cluster-ca-cert</code>, <code>redis-applier</code> SCRAM creds) — imperative copy at bootstrap time, ExternalSecrets via Vault is on the roadmap.</li>
+    </ul>
+
+    <h3>In-cluster failover</h3>
+    <p>Sentinel quorum (2 of 3) elects a new primary in seconds. Sentinel-aware clients receive a <code>+switch-master</code> notification, re-resolve, and continue. The redis-applier reconnects via Sentinel and resumes consuming from its committed offset, so no Kafka messages are lost during a primary swap.</p>
+
+    <h3>Day-to-day operations</h3>
+    <ul>
+      <li><strong>Inspect cluster state:</strong>
+        <pre><code>kubectl -n redis get redisfailover
+kubectl -n redis get pods -l app.kubernetes.io/component in (redis, sentinel)
+# Find the current primary:
+kubectl -n redis exec -it rfs-redis-0 -- redis-cli -p 26379 sentinel get-master-addr-by-name mymaster</code></pre>
+      </li>
+      <li><strong>Inspect applier consumer lag:</strong>
+        <pre><code>kubectl -n kafka exec -it kafka-broker-0 -- /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 \
+  --describe --group redis-applier</code></pre>
+      </li>
+      <li><strong>Backup:</strong> Longhorn snapshots cover the AOF/RDB on disk. Logical backup via <code>BGSAVE</code> + Longhorn snapshot is the recommended belt-and-braces approach. There is no scheduled cronjob for Redis backups today.</li>
+      <li><strong>Restore:</strong> The authoritative source is the Kafka WAL. To restore Redis from scratch, wipe the PVC, let the operator recreate the pods, and replay the topic from <code>--reset-offsets --to-earliest</code> on the <code>redis-applier</code> consumer group. Retention on the topic governs how far back you can restore — see Improvements.</li>
+      <li><strong>Dashboards:</strong> RedisInsight (<a href="/tools/redisinsight.html">tool page</a>) for ad-hoc inspection. Per-pod metrics will flow into SigNoz once the operator's metrics exporter is wired (currently not).</li>
+    </ul>
+  </section>
+
+  <h2 class="section-rule">Cross-cluster: the Kafka WAL pattern</h2>
+  <section class="card">
+    <h3>Flow</h3>
+    <p>Across clusters, the Kafka WAL stitches the two independent Redis instances into one eventually-consistent dataset. App writes go into Kafka rather than directly into Redis; on each side, the local redis-applier consumes the same topic and materialises it into the local Redis primary.</p>
     <pre><code>      ┌──── DC cluster ────┐                ┌──── DR cluster ────┐
       │                    │                │                    │
       │  app  ─────write──▶│  Kafka         │                    │
@@ -148,27 +180,13 @@
       │                                     │  Sentinels         │
       └─────────────────────────────────────┴────────────────────┘</code></pre>
 
-    <p>Two important properties of this layout:</p>
+    <p>Two properties make this work:</p>
     <ul>
       <li><strong>Ordering is preserved per key.</strong> The topic is partitioned by Redis key, so all writes for the same key land on the same partition and are consumed and replayed in the same order on both clusters.</li>
       <li><strong>Each cluster is self-contained at read time.</strong> The Sentinels and Redis pods on one side never talk to the other side. A network partition between DC and DR doesn't affect read availability on either side; it only stretches the replication lag.</li>
     </ul>
-  </section>
 
-  <section class="card">
-    <h2>Setup &amp; configuration</h2>
-    <p>Deployed via Argo CD. Each cluster's app definition under <code>clusters/&lt;dc|dr&gt;/apps/redis/</code> renders a <code>RedisFailover</code> CR that the Spotahome operator reconciles.</p>
-    <ul>
-      <li><strong>Storage:</strong> Longhorn StorageClass; one PVC per Redis pod. Sentinels are stateless.</li>
-      <li><strong>Resources:</strong> Sized for POC traffic; no eviction policy enforced beyond the operator default. <code>maxmemory</code> is left to the OS / PVC capacity for now (see Improvements).</li>
-      <li><strong>AOF / RDB:</strong> Default operator settings. AOF on the primary catches recent writes that have arrived via redis-applier but haven't yet been replicated to replicas.</li>
-      <li><strong>Auth:</strong> No password is enforced inside the namespace today (POC scope). Network reachability is constrained by NetworkPolicies and the cluster ingress posture. Production-equivalent would put a Sentinel-known password in a Secret and reference it in the RedisFailover CR.</li>
-      <li><strong>Cross-namespace plumbing:</strong> redis-applier lives in the <code>redis</code> namespace; it consumes from Kafka in the <code>kafka</code> namespace via SCRAM. Two secrets are bridged across namespaces today (<code>kafka-cluster-ca-cert</code>, <code>redis-applier</code> SCRAM creds) — imperative copy at bootstrap time, ExternalSecrets via Vault is on the roadmap.</li>
-    </ul>
-  </section>
-
-  <section class="card">
-    <h2>How redis-applier uses Kafka</h2>
+    <h3>How redis-applier consumes Kafka</h3>
     <p>The redis-applier is a small Go consumer (16.9 MB distroless, v0.1.1) running 3 replicas per cluster. Its contract:</p>
     <ul>
       <li><strong>Consumes</strong> from local Kafka, topic <code>redis-writes</code>, consumer group <code>redis-applier</code>.</li>
@@ -177,12 +195,20 @@
       <li><strong>Applies</strong> the op against the local Redis primary (resolved via Sentinel).</li>
       <li><strong>Reports ready</strong> on <code>/readyz</code> only after the consumer group has joined and partitions have been assigned (the v0.1.1 fix — earlier <code>v0.1.0</code> only flipped readyz after the first message, which broke rolling restarts on quiet topics).</li>
     </ul>
-    <p>On DR, MirrorMaker 2 mirrors <code>redis-writes</code> from DC Kafka into DR Kafka with the original partition keys preserved. The DR redis-applier sees the same messages in the same per-key order and produces the same Redis state, modulo replication lag.</p>
-    <p>End-to-end was validated on 2026-05-05 (11:21 UTC): a write produced into DC Kafka by the test harness materialised in DR Redis after the MM2 + applier hop.</p>
+    <p>On DR, MirrorMaker 2 mirrors <code>redis-writes</code> from DC Kafka into DR Kafka with the original partition keys preserved. The DR redis-applier sees the same messages in the same per-key order and produces the same Redis state, modulo replication lag. End-to-end was validated on 2026-05-05 (11:21 UTC).</p>
+
+    <h3>DC ⟷ DR cutover semantics</h3>
+    <p>Today there is no edge HAProxy frontend for Redis itself, so DC/DR cutover for Redis is implicit: the application's Kafka client (which is failover-aware via the <code>kafka-rke2-be</code> backup backend) starts producing into DR Kafka when DC drops. The DR redis-applier — which has been steadily replaying the mirrored topic the whole time — keeps writing into DR Redis. The application's read path needs to switch to DR Redis at the same time; this is currently the application's responsibility.</p>
+    <p>Lag during a cutover is the sum of:</p>
+    <ul>
+      <li>Producer round-trip when DC drops (one TCP retry to DR Kafka).</li>
+      <li>MM2 lag on messages already in DC Kafka that hadn't yet replicated (typically sub-second; bounded by MM2 commit interval).</li>
+      <li>DR redis-applier consumer lag on its local topic (typically near-zero in steady state).</li>
+    </ul>
   </section>
 
+  <h2 class="section-rule">Client guidance</h2>
   <section class="card">
-    <h2>How end clients should use it</h2>
     <p>There are two distinct client roles. Pick the right one for what you're building.</p>
 
     <h3>1. Application writes (durable, replicated)</h3>
@@ -220,42 +246,9 @@ String v = redis.get("orders:42");</code></pre>
     <p>Redis is not currently exposed via the edge HAProxy. Off-cluster reads aren't supported today — if you need them, the right path is a TCP backend on HAProxy with DC-primary/DR-backup and a Sentinel-aware client pointing at the public hostname. Until that's wired, off-cluster traffic should go via an in-cluster service (HTTP API, gateway, etc.) that fronts Redis.</p>
   </section>
 
-  <section class="card">
-    <h2>Operations</h2>
-    <ul>
-      <li><strong>Inspect cluster state:</strong>
-        <pre><code>kubectl -n redis get redisfailover
-kubectl -n redis get pods -l app.kubernetes.io/component in (redis, sentinel)
-# Find the current primary:
-kubectl -n redis exec -it rfs-redis-0 -- redis-cli -p 26379 sentinel get-master-addr-by-name mymaster</code></pre>
-      </li>
-      <li><strong>Inspect applier consumer lag:</strong>
-        <pre><code>kubectl -n kafka exec -it kafka-broker-0 -- /opt/kafka/bin/kafka-consumer-groups.sh \
-  --bootstrap-server localhost:9092 \
-  --describe --group redis-applier</code></pre>
-      </li>
-      <li><strong>Backup:</strong> Longhorn snapshots cover the AOF/RDB on disk. Logical backup via <code>BGSAVE</code> + Longhorn snapshot is the recommended belt-and-braces approach. There is no scheduled cronjob for Redis backups today.</li>
-      <li><strong>Restore:</strong> The authoritative source is the Kafka WAL. To restore Redis from scratch, wipe the PVC, let the operator recreate the pods, and replay the topic from <code>--reset-offsets --to-earliest</code> on the <code>redis-applier</code> consumer group. Retention on the topic governs how far back you can restore — see Improvements.</li>
-      <li><strong>Dashboards:</strong> RedisInsight (<a href="/tools/redisinsight.html">tool page</a>) for ad-hoc inspection. Per-pod metrics flow into SigNoz via the operator's metrics exporter once that's wired (currently not).</li>
-    </ul>
-  </section>
-
-  <section class="card">
-    <h2>Failover</h2>
-    <h3>Within a cluster</h3>
-    <p>Sentinel quorum (2 of 3) elects a new primary in seconds. Sentinel-aware clients receive a <code>+switch-master</code> notification, re-resolve, and continue. The redis-applier reconnects via Sentinel and resumes consuming from its committed offset, so no Kafka messages are lost.</p>
-    <h3>DC ⟷ DR</h3>
-    <p>Today there is no edge HAProxy frontend for Redis itself, so DC/DR cutover for Redis is implicit: the application's Kafka client (which is failover-aware via the <code>kafka-rke2-be</code> backup backend) starts producing into DR Kafka when DC drops. The DR redis-applier — which has been steadily replaying the mirrored topic the whole time — keeps writing into DR Redis. The application's read path needs to switch to DR Redis at the same time; this is currently the application's responsibility.</p>
-    <p>Lag during a cutover is the sum of:</p>
-    <ul>
-      <li>Producer round-trip when DC drops (one TCP retry to DR Kafka).</li>
-      <li>MM2 lag on messages already in DC Kafka that hadn't yet replicated (typically sub-second; bounded by MM2 commit interval).</li>
-      <li>DR redis-applier consumer lag on its local topic (typically near-zero in steady state).</li>
-    </ul>
-  </section>
-
+  <h2 class="section-rule">Evaluation</h2>
   <section class="card callout-strength">
-    <h2>Strengths</h2>
+    <h3>Strengths</h3>
     <ul>
       <li><strong>Decoupled durability.</strong> Redis can lose any pod (or its whole PVC) and the data is recoverable from Kafka — no separate Redis backup tier needed.</li>
       <li><strong>Standard Redis on the read path.</strong> Any Sentinel-aware client library works. Apps don't need a custom SDK.</li>
@@ -267,7 +260,7 @@ kubectl -n redis exec -it rfs-redis-0 -- redis-cli -p 26379 sentinel get-master-
   </section>
 
   <section class="card callout-weakness">
-    <h2>Weaknesses &amp; known limitations</h2>
+    <h3>Weaknesses &amp; known limitations</h3>
     <ul>
       <li><strong>Eventual consistency.</strong> DR Redis is always slightly behind DC. Read-after-write only holds if the read goes to the same cluster the write went through.</li>
       <li><strong>Application contract is load-bearing.</strong> Every Redis-mutating call must produce a well-formed message to the topic. A buggy producer that writes directly to Redis (bypassing Kafka) creates a divergence that will not be repaired by replay.</li>
@@ -283,7 +276,7 @@ kubectl -n redis exec -it rfs-redis-0 -- redis-cli -p 26379 sentinel get-master-
   </section>
 
   <section class="card callout-improvement">
-    <h2>How it should be improved</h2>
+    <h3>How it should be improved</h3>
     <ul>
       <li><strong>Schema registry on <code>redis-writes</code>.</strong> Avro or Protobuf with a Schema Registry (Apicurio or Confluent SR), so producers and the applier agree on the wire format and bad messages are rejected at produce time.</li>
       <li><strong>Idempotency keys.</strong> Add a per-op idempotency token to the message. The applier dedupes on it, so a re-delivery (after consumer rebalance) doesn't double-apply non-idempotent ops like <code>INCR</code>.</li>
@@ -299,8 +292,8 @@ kubectl -n redis exec -it rfs-redis-0 -- redis-cli -p 26379 sentinel get-master-
     </ul>
   </section>
 
+  <h2 class="section-rule">References</h2>
   <section class="card">
-    <h2>References</h2>
     <ul>
       <li>Spotahome <a href="https://github.com/spotahome/redis-operator">redis-operator on GitHub</a> (RedisFailover CR docs).</li>
       <li>ADR-0018 — Redis-via-Kafka WAL (in <code>~/cloud-init/adr/</code>).</li>
