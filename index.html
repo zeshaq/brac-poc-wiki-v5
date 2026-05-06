@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BRAC POC — DC/DR tools catalogue</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+  <div class="brand">
+    <div class="brand-mark">B</div>
+    <div>
+      <div class="brand-title">BRAC POC</div>
+      <div class="brand-sub">DC / DR tools</div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-group">
+      <div class="nav-heading">Catalogue</div>
+      <a href="#overview">Overview</a>
+      <a href="#topology">Topology</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-heading">Foundation</div>
+      <a href="#argocd">Argo CD</a>
+      <a href="#cert-manager">cert-manager</a>
+      <a href="#longhorn">Longhorn</a>
+      <a href="#webhook-pdns">webhook-pdns</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-heading">Identity &amp; secrets</div>
+      <a href="#keycloak">Keycloak</a>
+      <a href="#vault">HashiCorp Vault</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-heading">Data &amp; streaming</div>
+      <a href="#strimzi">Strimzi operator</a>
+      <a href="#kafka">Apache Kafka (KRaft)</a>
+      <a href="#mm2">MirrorMaker 2</a>
+      <a href="#redis-operator">Redis operator</a>
+      <a href="#redis">Redis (RedisFailover)</a>
+      <a href="#redis-applier">redis-applier</a>
+      <a href="#redisinsight">RedisInsight</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-heading">CI / CD &amp; IaC</div>
+      <a href="#nexus">Sonatype Nexus 3</a>
+      <a href="#jenkins">Jenkins</a>
+      <a href="#awx">Ansible AWX</a>
+      <a href="#terrakube">Terrakube</a>
+      <a href="#gitlab">GitLab</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-heading">Observability</div>
+      <a href="#signoz">SigNoz</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-heading">Edge / network</div>
+      <a href="#haproxy">HAProxy (edge)</a>
+      <a href="#pdns">PowerDNS</a>
+      <a href="#minio">MinIO</a>
+    </div>
+  </nav>
+
+  <div class="footer-note">v5 · live snapshot</div>
+</aside>
+
+<main id="main" class="content">
+
+  <header class="page-header">
+    <div class="kicker">BRAC POC</div>
+    <h1>Tools deployed across DC and DR</h1>
+    <p class="lede">
+      Single KVM host (<code>dl385</code>) running two RKE2 clusters
+      (<code>rke2</code> = DC, <code>rke2-dr</code> = DR) plus a small set of
+      shared infrastructure VMs on the <code>br30</code> app subnet.
+      Every catalogued component below is deployed in <strong>both</strong>
+      DC and DR unless explicitly noted as DR-only or shared infra.
+    </p>
+    <div class="legend">
+      <span class="badge dc">DC</span>
+      <span class="badge dr">DR</span>
+      <span class="badge dr-only">DR-only</span>
+      <span class="badge shared">Shared infra</span>
+    </div>
+  </header>
+
+  <section id="overview" class="card">
+    <h2>Overview</h2>
+    <p>
+      The BRAC proof-of-concept demonstrates an active/standby DC/DR posture
+      for a Kubernetes-hosted application platform on a single physical
+      host. Argo CD drives GitOps from <code>infra/gitops-rke2</code>;
+      identity is centralised on Keycloak; data is replicated DC&rarr;DR via
+      Kafka MirrorMaker 2; cutover is performed at the edge HAProxy using
+      <code>backup</code> backends with no DNS movement.
+    </p>
+    <table class="summary">
+      <thead>
+        <tr><th>Layer</th><th>Components</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Foundation</td><td>Argo CD, cert-manager, Longhorn, webhook-pdns</td></tr>
+        <tr><td>Identity &amp; secrets</td><td>Keycloak, Vault</td></tr>
+        <tr><td>Data &amp; streaming</td><td>Strimzi, Kafka KRaft, MirrorMaker 2, Redis operator, Redis, redis-applier, RedisInsight</td></tr>
+        <tr><td>CI / CD &amp; IaC</td><td>Nexus 3, Jenkins, AWX, Terrakube, GitLab</td></tr>
+        <tr><td>Observability</td><td>SigNoz</td></tr>
+        <tr><td>Edge / network</td><td>HAProxy, PowerDNS, MinIO</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="topology" class="card">
+    <h2>Topology</h2>
+    <ul>
+      <li><strong>DC cluster</strong> — RKE2 on three VMs (<code>rke2-1/2/3</code>).</li>
+      <li><strong>DR cluster</strong> — RKE2 on three VMs (<code>rke2-dr-1/2/3</code>).</li>
+      <li><strong>Shared infra VMs</strong> on <code>br30</code> — HAProxy (edge), PowerDNS (auth DNS), GitLab, MinIO.</li>
+      <li><strong>Edge ingress</strong> — HAProxy with <code>backup</code> backends; DC primary, DR backup. Failover proven for Vault, Keycloak, Terrakube, AWX.</li>
+      <li><strong>GitOps source of truth</strong> — <code>infra/gitops-rke2</code> on the lab GitLab; Argo CD in each cluster reconciles its own scope.</li>
+    </ul>
+  </section>
+
+  <h2 class="section-rule">Foundation</h2>
+
+  <section id="argocd" class="card">
+    <div class="card-head">
+      <h3>Argo CD</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>GitOps controller per cluster. Reconciles <code>clusters/dc/apps/</code> on DC and <code>clusters/dr/apps/</code> on DR from the <code>infra/gitops-rke2</code> repo. Root-app glob fans out per-app Applications.</p>
+    <dl class="meta">
+      <dt>Role</dt><dd>Continuous delivery / drift detection</dd>
+      <dt>Pattern</dt><dd>App-of-apps with shared <code>helm-values/</code> + per-cluster overlays</dd>
+    </dl>
+  </section>
+
+  <section id="cert-manager" class="card">
+    <div class="card-head">
+      <h3>cert-manager</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Issues TLS certificates for in-cluster Ingresses and internal services. ClusterIssuers shipped from <code>shared/cluster-issuers/</code>.</p>
+    <dl class="meta">
+      <dt>Role</dt><dd>Certificate lifecycle</dd>
+    </dl>
+  </section>
+
+  <section id="longhorn" class="card">
+    <div class="card-head">
+      <h3>Longhorn</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Distributed block storage for stateful workloads (Vault, Kafka, Redis, Postgres, MinIO buckets sourced via PVC). Provides the default storage class on each cluster.</p>
+    <dl class="meta">
+      <dt>Role</dt><dd>Persistent volumes for stateful sets</dd>
+    </dl>
+  </section>
+
+  <section id="webhook-pdns" class="card">
+    <div class="card-head">
+      <h3>webhook-pdns (cert-manager)</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>cert-manager DNS-01 webhook that talks to the lab PowerDNS, allowing certificate issuance against <code>*.apps.sub.comptech-lab.com</code> records.</p>
+    <dl class="meta">
+      <dt>Role</dt><dd>DNS-01 ACME solver</dd>
+    </dl>
+  </section>
+
+  <h2 class="section-rule">Identity &amp; secrets</h2>
+
+  <section id="keycloak" class="card">
+    <div class="card-head">
+      <h3>Keycloak</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>codecentric/keycloakx 7.0.0 chart, Keycloak 26.3.5, single replica per cluster, Postgres StatefulSet, <code>comptech</code> realm pre-imported. Issuer <code>https://auth.apps.sub.comptech-lab.com/realms/comptech</code>. Central OIDC IdP for the platform — Vault, Argo CD, AWX, Terrakube, GitLab, Jenkins, Nexus all federate here.</p>
+    <dl class="meta">
+      <dt>Chart / version</dt><dd>codecentric/keycloakx 7.0.0 · Keycloak 26.3.5</dd>
+      <dt>Hostname</dt><dd><code>auth.apps.sub.comptech-lab.com</code></dd>
+      <dt>Failover</dt><dd>DC&rarr;DR ~13s, DR&rarr;DC ~18s (HAProxy backup)</dd>
+    </dl>
+  </section>
+
+  <section id="vault" class="card">
+    <div class="card-head">
+      <h3>HashiCorp Vault</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Helm 0.31.0, Vault 1.18.2, Raft-3 cluster per side, transit auto-unseal against a small bootstrap Vault on a dedicated VM. Initialised and unsealed in both clusters.</p>
+    <dl class="meta">
+      <dt>Mode</dt><dd>Raft, transit auto-unseal</dd>
+      <dt>Hostname</dt><dd><code>vault-rke2.apps.sub.comptech-lab.com</code></dd>
+      <dt>Failover</dt><dd>DC&rarr;DR ~9s (HAProxy backup)</dd>
+    </dl>
+  </section>
+
+  <h2 class="section-rule">Data &amp; streaming</h2>
+
+  <section id="strimzi" class="card">
+    <div class="card-head">
+      <h3>Strimzi operator</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Strimzi 0.46.1 watching the <code>kafka</code> namespace. Manages the KRaft Kafka cluster, topics, KafkaUsers, and MirrorMaker 2 on DR.</p>
+    <dl class="meta">
+      <dt>Version</dt><dd>0.46.1</dd>
+    </dl>
+  </section>
+
+  <section id="kafka" class="card">
+    <div class="card-head">
+      <h3>Apache Kafka (KRaft)</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>3 brokers + 3 controllers in KRaft mode per cluster. Internal listener <code>scram</code> on 9095 (TLS + SCRAM-SHA-512) for in-cluster clients; <code>redis-writes</code> topic carries the Redis WAL pattern (ADR-0018).</p>
+    <dl class="meta">
+      <dt>Topology</dt><dd>3 brokers + 3 controllers, KRaft</dd>
+      <dt>AuthN/Z</dt><dd>SCRAM-SHA-512 + simple authz; ANONYMOUS superuser on DR for MM2</dd>
+    </dl>
+  </section>
+
+  <section id="mm2" class="card">
+    <div class="card-head">
+      <h3>MirrorMaker 2</h3>
+      <div class="badges"><span class="badge dr-only">DR-only</span></div>
+    </div>
+    <p>Strimzi-managed Connect cluster (2 pods) replicating from DC Kafka into DR Kafka. Underpins the cross-cluster Redis WAL pattern.</p>
+    <dl class="meta">
+      <dt>Topology</dt><dd>2 pods, 1/1 Ready</dd>
+      <dt>Direction</dt><dd>DC &rarr; DR</dd>
+    </dl>
+  </section>
+
+  <section id="redis-operator" class="card">
+    <div class="card-head">
+      <h3>Redis operator (Spotahome)</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Spotahome <code>redis-operator</code> 3.2.13 reconciling RedisFailover CRs.</p>
+    <dl class="meta">
+      <dt>Version</dt><dd>3.2.13</dd>
+    </dl>
+  </section>
+
+  <section id="redis" class="card">
+    <div class="card-head">
+      <h3>Redis (RedisFailover)</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>3 Redis + 3 Sentinel pods per cluster managed by RedisFailover. Receives writes via the redis-applier consumer for cross-cluster state.</p>
+    <dl class="meta">
+      <dt>Topology</dt><dd>3 redis + 3 sentinel</dd>
+    </dl>
+  </section>
+
+  <section id="redis-applier" class="card">
+    <div class="card-head">
+      <h3>redis-applier</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Custom Go consumer (v0.1.1, 16.9 MB distroless) that reads <code>redis-writes</code> from local Kafka and applies into the local Redis primary. Enables the Kafka WAL replication pattern (ADR-0018) without coupling Redis directly across sites. End-to-end DR test passed 2026-05-05.</p>
+    <dl class="meta">
+      <dt>Image</dt><dd><code>nexus.apps.sub.comptech-lab.com/redis-applier:0.1.1</code></dd>
+      <dt>Pattern</dt><dd>Kafka WAL &rarr; Redis (ADR-0018)</dd>
+      <dt>Replicas</dt><dd>3/3 Ready in each cluster</dd>
+    </dl>
+  </section>
+
+  <section id="redisinsight" class="card">
+    <div class="card-head">
+      <h3>RedisInsight</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Redis admin UI, raw manifests. Exposed via edge HAProxy; failover smoke test passed.</p>
+  </section>
+
+  <h2 class="section-rule">CI / CD &amp; IaC</h2>
+
+  <section id="nexus" class="card">
+    <div class="card-head">
+      <h3>Sonatype Nexus 3</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Artifact and container registry for the lab. Hosts the redis-applier Docker image and (planned) Docker / Maven / npm / Helm proxy repos.</p>
+    <dl class="meta">
+      <dt>Hostname</dt><dd><code>nexus.apps.sub.comptech-lab.com</code></dd>
+    </dl>
+  </section>
+
+  <section id="jenkins" class="card">
+    <div class="card-head">
+      <h3>Jenkins</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Jenkins LTS controller per cluster. Custom plugin-baked image is on the roadmap; current deployment uses the default LTS image.</p>
+  </section>
+
+  <section id="awx" class="card">
+    <div class="card-head">
+      <h3>Ansible AWX</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>awx-operator 3.2.1, AWX 24.6.1, operator-managed Postgres-15-c9s per cluster. OIDC against Keycloak via <code>SOCIAL_AUTH_OIDC_*</code>.</p>
+    <dl class="meta">
+      <dt>Hostname</dt><dd><code>awx.apps.sub.comptech-lab.com</code></dd>
+      <dt>Failover</dt><dd>DC&rarr;DR ~14s, DR&rarr;DC ~42s</dd>
+    </dl>
+  </section>
+
+  <section id="terrakube" class="card">
+    <div class="card-head">
+      <h3>Terrakube</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>Self-hosted Terraform/OpenTofu collaboration platform. Chart 4.6.2, appVersion 2.30.1 — api + ui + executor + registry. Per-cluster Postgres &amp; Redis StatefulSets; remote state in MinIO bucket <code>terrakube-state</code>; OIDC via Keycloak public client with PKCE.</p>
+    <dl class="meta">
+      <dt>Hostnames</dt><dd><code>terrakube-{ui,api,reg}.apps.sub.comptech-lab.com</code></dd>
+      <dt>Failover</dt><dd>DC&rarr;DR ~16s, DR&rarr;DC ~65s (Spring Boot cold start)</dd>
+    </dl>
+  </section>
+
+  <section id="gitlab" class="card">
+    <div class="card-head">
+      <h3>GitLab</h3>
+      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
+    </div>
+    <p>Self-managed GitLab on a dedicated VM. Hosts the lab's GitOps repos (<code>infra/gitops-rke2</code>, BRAC POC docs / wiki) and CI for them. Single-instance — not part of the DC/DR pair.</p>
+  </section>
+
+  <h2 class="section-rule">Observability</h2>
+
+  <section id="signoz" class="card">
+    <div class="card-head">
+      <h3>SigNoz</h3>
+      <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    </div>
+    <p>OpenTelemetry-native APM. No-ZooKeeper, single-node ClickHouse profile per cluster. Functional; cosmetic OOS in Argo CD pending an <code>ignoreDifferences</code> rule.</p>
+  </section>
+
+  <h2 class="section-rule">Edge / network &amp; shared</h2>
+
+  <section id="haproxy" class="card">
+    <div class="card-head">
+      <h3>HAProxy (edge)</h3>
+      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
+    </div>
+    <p>L7 ingress for the entire lab. <code>*.apps.sub.comptech-lab.com</code> resolves to HAProxy, which fans out to the DC and DR cluster ingress controllers. DC/DR failover is implemented here using <code>backup</code> backends — DC primary, DR backup, no DNS movement.</p>
+    <dl class="meta">
+      <dt>Failover model</dt><dd>HAProxy <code>backup</code> keyword per backend</dd>
+      <dt>Wired backends</dt><dd>vault-rke2, auth (Keycloak), terrakube-{ui,api,reg}, awx</dd>
+    </dl>
+  </section>
+
+  <section id="pdns" class="card">
+    <div class="card-head">
+      <h3>PowerDNS</h3>
+      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
+    </div>
+    <p>Authoritative DNS for the lab zone <code>sub.comptech-lab.com</code>. Drives ACME DNS-01 challenges through cert-manager's webhook-pdns.</p>
+  </section>
+
+  <section id="minio" class="card">
+    <div class="card-head">
+      <h3>MinIO</h3>
+      <div class="badges"><span class="badge shared">Shared infra (br30 VM)</span></div>
+    </div>
+    <p>S3-compatible object storage on a dedicated VM. Buckets back Terrakube remote state (<code>terrakube-state</code>) and (planned) Vault snapshots, Jenkins backups, Nexus blobs.</p>
+  </section>
+
+  <footer class="page-footer">
+    <p>Generated from the live RKE2 DC/DR snapshot. Last updated 2026-05-06.</p>
+    <p>Cluster failover smoke tests proven for Vault, Keycloak, Terrakube, AWX. See per-card cards for measured cutover times.</p>
+  </footer>
+
+</main>
+
+<script>
+  // highlight current section in sidebar on scroll
+  const links = document.querySelectorAll('.nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const byId = new Map(sections.map(s => [s.id, document.querySelector('.nav a[href="#' + s.id + '"]')]));
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const a = byId.get(e.target.id);
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -65% 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
