@@ -49,8 +49,10 @@
     <a class="nav-heading-link active" aria-current="page" href="/tools/kafka.html">Kafka</a>
     <a href="/tools/strimzi.html">Strimzi operator</a>
     <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/redis.html">Redis</a>
     <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
-    <a href="/tools/redis.html">Redis (RedisFailover)</a>
     <a href="/tools/redis-applier.html">redis-applier</a>
     <a href="/tools/redisinsight.html">RedisInsight</a>
   </div>
@@ -101,7 +103,7 @@
 
   <h2 class="section-rule">Overview</h2>
   <section class="card">
-    <p>Kafka is the streaming substrate for the platform. Two independent KRaft clusters (one per RKE2 cluster, three brokers + three controllers each) carry the Redis WAL (ADR-0018), MirrorMaker 2 cross-cluster replication, and any application that needs durable, ordered, replayable messaging. The two clusters know nothing about each other at the metadata layer — replication happens on top, at the topic layer, by MirrorMaker 2 running on DR.</p>
+    <p>Kafka is the streaming substrate for the platform. Two independent KRaft clusters (one per RKE2 cluster, three brokers + three controllers each) carry application messaging, cross-cluster replication, and any workload that needs durable, ordered, replayable streams. The two clusters know nothing about each other at the metadata layer — replication happens on top, at the topic layer, by MirrorMaker 2 running on DR.</p>
     <p>Both clusters are managed by Strimzi (operator 0.46.1 reconciling a <code>Kafka</code> custom resource per cluster). External clients reach Kafka through the edge HAProxy by SNI on port <strong>443</strong>, so the same FQDN set works against either side and clients can fail over at the TCP layer with no DNS changes.</p>
     <dl class="meta meta-grid">
       <dt>Mode</dt><dd>KRaft (no ZooKeeper)</dd>
@@ -112,7 +114,6 @@
       <dt>AuthN / AuthZ</dt><dd>SCRAM-SHA-512 + Strimzi <code>simple</code> authorization (per-<code>KafkaUser</code> ACLs)</dd>
       <dt>DR-only quirk</dt><dd><code>ANONYMOUS</code> super-user on DR so the MirrorMaker 2 bootstrap path completes</dd>
       <dt>Cross-cluster replication</dt><dd><a href="/tools/mirrormaker2.html">MirrorMaker 2</a> on DR, pulling from DC</dd>
-      <dt>Carrier topics</dt><dd><code>redis-writes</code> (Redis WAL — ADR-0018), <code>jboss.*</code> (external JBoss app)</dd>
       <dt>External smoke</dt><dd>Validated end-to-end via <code>kcat</code> on 2026-05-06 (produce, consume, ACL deny)</dd>
     </dl>
   </section>
@@ -153,11 +154,11 @@
 
     <h3>AuthN, AuthZ, and KafkaUsers</h3>
     <p>Authentication is SCRAM-SHA-512 on both listeners. Authorization is Strimzi <code>simple</code> (Kafka's <code>StandardAuthorizer</code>); ACLs are declared on each <code>KafkaUser</code> resource, not in a global ACL list, so the GitOps definition of an identity carries its permissions with it.</p>
-    <p>Today's identities (one Strimzi <code>KafkaUser</code> per cluster):</p>
+    <p>Identities are minimal — one Strimzi <code>KafkaUser</code> per cluster, deployed via GitOps. Each user's ACLs live on the same CR as the user, so the principal and its rights are reviewed together. Two patterns are in use today:</p>
     <ul>
-      <li><code>mm2</code> — used by MirrorMaker 2. Broad ACLs (it replicates whole topics).</li>
-      <li><code>redis-applier</code> — Read on <code>redis-writes</code> + on the <code>redis-applier</code> consumer-group prefix. Used by the in-cluster <a href="/tools/redis-applier.html">redis-applier</a>.</li>
-      <li><code>jboss-client</code> — external JBoss application identity. SCRAM password is shared across DC and DR, delivered via a pre-created <code>Secret</code> that Strimzi consumes when materialising the SCRAM credential record. ACLs: Read/Write/Describe/Create on the <code>jboss.</code> topic prefix, Read on the <code>jboss.</code> consumer-group prefix, <code>IdempotentWrite</code> on the cluster.</li>
+      <li><strong>In-cluster service identity.</strong> A KafkaUser with narrow ACLs (Read on a single topic + on its consumer-group prefix) used by an in-cluster consumer or producer. The deployed example is <code>redis-applier</code> — see the <a href="/tools/redis.html">Redis page</a> for what it does. The pattern itself (one user, prefix-scoped ACLs) is the template for any in-cluster app that wants to read or write a single topic family.</li>
+      <li><strong>External / failover-aware identity.</strong> A KafkaUser whose SCRAM password is the <em>same on both clusters</em>, delivered via a pre-created <code>Secret</code> that Strimzi reads when materialising the SCRAM credential. ACLs are scoped to a topic prefix + consumer-group prefix + cluster <code>IdempotentWrite</code>. Clients hold one password and one client config; if DC fails over to DR at the edge, neither auth nor authz changes. The deployed example is <code>jboss-client</code>, but the pattern works for any external app that needs to fail over between clusters without reconfiguring.</li>
+      <li><strong>MirrorMaker 2 identity.</strong> <code>mm2</code> — broad ACLs (it replicates whole topics). DR-side only.</li>
     </ul>
     <p>DR-only quirk: an <code>ANONYMOUS</code> entry is configured as a <code>super.user</code> on the DR cluster so MirrorMaker 2's auth handshake completes during the cross-cluster bootstrap sequence. Scoped to DR; not present on DC.</p>
 
@@ -203,9 +204,10 @@
     <p>The DC cluster does not run MM2 — replication is one-directional today. If DC fails and DR takes over writes, those writes do not flow back to DC when DC recovers; reconciliation is manual.</p>
 
     <h3>What is replicated</h3>
+    <p>The MM2 include list explicitly enumerates the topics that cross the boundary; partition keys are preserved so per-key order is the same on both sides. Adding a topic to replication is a one-line MR against <code>clusters/dr/manifests/kafka/mirrormaker2.yaml</code>.</p>
     <ul>
-      <li><code>redis-writes</code> — the Redis WAL (ADR-0018). Mirrored continuously, partition keys preserved so per-key order is the same on both sides.</li>
-      <li><strong>Not currently mirrored:</strong> <code>jboss.*</code>. The external JBoss app's edge auth path is failover-aware (same SCRAM creds, both CA certs trusted, edge HAProxy routes DC-primary/DR-backup), but its topic data is not. If data continuity matters for that app, add <code>jboss\..*</code> to the MM2 include list.</li>
+      <li><strong>Currently mirrored:</strong> <code>redis-writes</code> (consumed by redis-applier — see the <a href="/tools/redis.html">Redis page</a> for the application of this topic).</li>
+      <li><strong>Currently excluded:</strong> <code>jboss.*</code>. The external JBoss app's edge auth path is failover-aware (same SCRAM creds, both CA certs trusted, edge HAProxy routes DC-primary/DR-backup), but its topic data is not. If data continuity matters for that app, add <code>jboss\..*</code> to the include list.</li>
     </ul>
   </section>
 
@@ -249,7 +251,7 @@
       <li><strong>Same FQDNs work in both clusters.</strong> External clients use a single bootstrap name and per-broker names; failover happens at L4 on the edge, transparent to the client. No DNS movement, no client reconfiguration.</li>
       <li><strong>Single trust bundle for failover.</strong> Concatenating both cluster CAs into one PEM lets clients validate either side without per-cluster client config.</li>
       <li><strong>AuthZ lives with the identity.</strong> ACLs on the KafkaUser CR mean the principal and its rights are reviewed together in the same MR.</li>
-      <li><strong>Reusable substrate.</strong> The same Kafka clusters carry the Redis WAL, the JBoss application stream, and any future producer that needs durability + replay — no new infrastructure per app.</li>
+      <li><strong>Reusable substrate.</strong> One Kafka deployment serves multiple unrelated workloads — no new infrastructure per app. Adding a new producer is a KafkaUser + topic + ACL block in GitOps.</li>
     </ul>
   </section>
 
@@ -273,10 +275,10 @@
       <li><strong>Bidirectional replication.</strong> A second MM2 deployment on DC pulling from DR closes the post-DR-write recovery story. Avoid loops via topic-prefix conventions or MM2's <code>IdentityReplicationPolicy</code>.</li>
       <li><strong>Drop <code>ANONYMOUS</code> super-user on DR.</strong> Replace with a dedicated <code>mm2</code> KafkaUser with the precise ACLs MM2 needs. Removes the catch-all and tightens audit.</li>
       <li><strong>Per-identity quotas.</strong> Set <code>producer_byte_rate</code> and <code>consumer_byte_rate</code> on each <code>KafkaUser</code>; one runaway client can no longer starve the others.</li>
-      <li><strong>Lag SLO on MM2 + redis-applier.</strong> Wire <code>kafka_consumer_group_lag</code> (and the equivalent for MM2's offset-sync topic) into SigNoz; alert on minutes of lag.</li>
+      <li><strong>Lag SLO on MM2 + per-consumer.</strong> Wire <code>kafka_consumer_group_lag</code> (and the equivalent for MM2's offset-sync topic) into SigNoz; alert on minutes of lag. Each in-cluster consumer (e.g. redis-applier) gets its own SLO.</li>
       <li><strong>CA-rotation calendar item.</strong> Codify the annual combined-PEM refresh as a scheduled GitOps job (or at minimum a calendar reminder).</li>
       <li><strong>ExternalSecrets via Vault.</strong> Replace the imperative secret bridging with ExternalSecrets sourced from Vault; rotate SCRAM passwords via Vault rather than static files.</li>
-      <li><strong>Schema registry.</strong> Track an Apicurio or Confluent Schema Registry deployment alongside Kafka so producers and consumers agree on wire format; also unblocks compacted "latest state" topics for the Redis WAL.</li>
+      <li><strong>Schema registry.</strong> Track an Apicurio or Confluent Schema Registry deployment alongside Kafka so producers and consumers agree on wire format. Also unblocks compacted "latest state" topics for any consumer that wants a snapshot rather than a replay.</li>
       <li><strong>OAuth (Keycloak) instead of SCRAM.</strong> Once Keycloak is the platform IdP, Strimzi supports <code>oauth</code> listener authentication. Tokens scoped per app + per topic prefix beats per-user SCRAM passwords.</li>
       <li><strong>Active/active per-topic.</strong> For specific topics that need bidirectional traffic, set up MM2 with active/active mirroring + topic-prefix conventions to avoid loops.</li>
     </ul>
@@ -288,7 +290,7 @@
       <li><a href="https://strimzi.io/">Strimzi operator</a> — the Kafka operator (0.46.1).</li>
       <li><a href="https://kafka.apache.org/documentation/#kraft">Apache Kafka — KRaft mode</a>.</li>
       <li><a href="https://strimzi.io/docs/operators/latest/configuring.html#type-KafkaListener-reference">Strimzi listener configuration</a> — listener types, <code>configuration.brokers[*].advertisedPort</code>, host overrides.</li>
-      <li>ADR-0018 — Redis-via-Kafka WAL (in <code>~/cloud-init/adr/</code>).</li>
+      <li>ADR-0018 — Redis-via-Kafka WAL pattern (in <code>~/cloud-init/adr/</code>); an example consumer of this Kafka substrate, documented in detail on the <a href="/tools/redis.html">Redis page</a>.</li>
       <li><a href="https://www.rfc-editor.org/rfc/rfc4592">RFC 4592</a> — wildcard DNS records and "empty non-terminal" labels (the reason explicit A records were needed for nested broker FQDNs).</li>
       <li>Cross-references in this catalogue:
         <ul>
