@@ -105,14 +105,14 @@
     <div class="kicker">Security</div>
     <h1>Trivy Operator</h1>
     <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
-    <p class="lede">Continuous in-cluster vulnerability, configuration, secret, and SBOM scanning. Findings flow to DefectDojo via the trivy-defectdojo-bridge CronJob.</p>
+    <p class="lede">Continuous in-cluster vulnerability, configuration, secret, and SBOM scanning. DC-only for v0.1. Findings flow to DefectDojo via the hourly trivy-defectdojo-bridge CronJob.</p>
   </header>
 
   <section class="card">
     <h2>Quick facts</h2>
     <dl class="meta meta-grid">
       <dt>Helm chart</dt><dd><code>aquasecurity/trivy-operator 0.32.1</code> (app 0.30.1)</dd>
-      <dt>Namespace</dt><dd><code>trivy-system</code> on DC + DR</dd>
+      <dt>Namespace</dt><dd><code>trivy-system</code> on DC (DR deferred to v0.2 — chart repo not allow-listed in <code>rke2-dr</code> AppProject)</dd>
       <dt>Mode</dt><dd><code>Standalone</code> — each scan job pulls its own vuln DB. v0.2 switches to ClientServer with a centralised Trivy server.</dd>
       <dt>Scanners enabled</dt><dd>Vulnerability, ConfigAudit, ExposedSecret, RBACAssessment, InfraAssessment, SBOM</dd>
       <dt>Skip-namespaces</dt><dd><code>kube-system, kube-public, kube-node-lease, argocd, longhorn-system, cert-manager, trivy-system, defectdojo</code></dd>
@@ -124,13 +124,13 @@
   <section class="card">
     <h2>What it is</h2>
     <p>The Trivy Operator runs as a controller in <code>trivy-system</code> and watches every workload in scope. On pod creation (or scheduled re-scan) it kicks off short-lived Jobs that run <code>aquasec/trivy</code> against the pod's image and Kubernetes manifest, then writes findings as CRDs (<code>VulnerabilityReport</code>, <code>ConfigAuditReport</code>, <code>ExposedSecretReport</code>, <code>SbomReport</code>, <code>RbacAssessmentReport</code>, <code>InfraAssessmentReport</code>). Reports are namespaced and visible via <code>kubectl get vulnerabilityreport -A</code>.</p>
-    <p>The CRDs are a structured view, but they are not the canonical "Trivy JSON" that other tooling expects. DefectDojo's <code>Trivy Operator Scan</code> parser (DD 2.x+) accepts the <em>raw <code>kubectl get vulnerabilityreport -o json</code> output</em>, so the bridge does not need to convert anything — it just lists the CRDs and POSTs the JSON blob.</p>
+    <p>The CRDs are a structured view. DefectDojo's <code>Trivy Operator Scan</code> parser (DD 2.x+) accepts a <em>single CRD object per upload</em> — passing a <code>kind: List</code> wrapper produces 0 findings. The bridge therefore iterates each <code>items[]</code> and POSTs them one at a time, which is why it's a small Python script (image <code>python:3.12-slim</code>) rather than a one-shot <code>curl</code>.</p>
   </section>
 
   <section class="card">
     <h2>Architecture</h2>
     <p>Single Deployment (the operator) on each cluster. No DaemonSet for v0.1 (the optional <code>node-collector</code> DaemonSet — which mounts host paths to do CIS/NSA compliance — is disabled). Per-image scans run as transient Jobs scheduled by the operator with a concurrency limit of 5 at a time and a 30 s retry delay; results land in the workload's own namespace.</p>
-    <p>The <em>data flow</em>: Pod created → Operator schedules scan Job → Trivy container in Job downloads vuln DB and SBOM-extracts the image → writes CRD in workload namespace → bridge CronJob (next hour) lists all CRDs and uploads to DefectDojo, where the <code>Trivy Operator Scan</code> parser splits findings into per-image components.</p>
+    <p>The <em>data flow</em>: Pod created → Operator schedules scan Job → Trivy container in Job downloads vuln DB and SBOM-extracts the image → writes CRD in workload namespace → bridge CronJob (hourly @:30) lists all CRDs and POSTs each item to <code>/api/v2/import-scan/</code> with <code>scan_type=Trivy Operator Scan</code>, <code>product_type_name=Platform</code>, <code>product_name="BRAC POC RKE2"</code>, <code>engagement_name="trivy-operator-rke2-dc"</code>, and a per-item <code>tag</code>. DefectDojo de-duplicates findings within the engagement.</p>
   </section>
 
   <section class="card">
@@ -153,8 +153,8 @@
 
   <section class="card">
     <h2>Failover</h2>
-    <p>Independent per cluster — DC and DR each run their own operator and scan their own workloads. Reports are local to each cluster's etcd; cross-cluster aggregation happens only at the DefectDojo dashboard layer (the bridge CronJob in each cluster uploads to the same DefectDojo instance, with engagements <code>trivy-operator-rke2-dc</code> and <code>trivy-operator-rke2-dr</code>).</p>
-    <p>If DC's cluster goes down, DR's reports keep flowing into DefectDojo (DR bridge talks to DefectDojo over the public edge URL). If DefectDojo itself goes down, no aggregation happens until it's back; CRDs persist locally either way.</p>
+    <p>v0.1 is DC-only. v0.2 adds a DR pair (the <code>aquasecurity</code> chart repo needs to be allow-listed in <code>clusters/dr/argocd/projects/rke2-dr.yaml</code>, plus the DR bridge CronJob talking to DefectDojo over the public edge URL). Until then, DR workloads are NOT scanned by Trivy Operator.</p>
+    <p>If DC's cluster goes down, no aggregation happens until it's back. CRDs persist locally in each cluster's etcd either way.</p>
   </section>
 
   <section class="card">
@@ -163,7 +163,7 @@
       <li><a href="https://aquasecurity.github.io/trivy-operator/latest/">Trivy Operator docs</a></li>
       <li><a href="https://aquasecurity.github.io/trivy/latest/docs/configuration/db/">Trivy DB configuration</a></li>
       <li>memory: <code>shared/helm-values/trivy-operator.yaml</code> (in gitops-rke2)</li>
-      <li>Bridge: <code>clusters/{dc,dr}/manifests/trivy-defectdojo-bridge/</code></li>
+      <li>Bridge: <code>clusters/dc/manifests/trivy-defectdojo-bridge/</code></li>
     </ul>
   </section>
 

@@ -124,38 +124,43 @@
 
   <section class="card">
     <h2>What it is</h2>
-    <p>OWASP DefectDojo is a security findings management platform: it ingests scan output from many tools (Trivy, Trivy Operator, CycloneDX SBOM, Snyk, Bandit, Burp, ZAP, ...), de-duplicates findings, tracks them through engagements, and surfaces a single dashboard view. Here it is used as the <em>aggregation layer</em> above Trivy: the in-cluster operator on DC and DR both feed into it (via the <code>trivy-defectdojo-bridge</code> CronJob), and the Jenkins CI flow uploads per-build results from each pipeline.</p>
+    <p>OWASP DefectDojo is a security findings management platform: it ingests scan output from many tools (Trivy, Trivy Operator, CycloneDX SBOM, Snyk, Bandit, Burp, ZAP, ...), de-duplicates findings, tracks them through engagements, and surfaces a single dashboard view. Here it is used as the <em>aggregation layer</em> above Trivy: the in-cluster operator on DC feeds into it (via the <code>trivy-defectdojo-bridge</code> CronJob), and the Jenkins CI flow uploads per-build results from each pipeline.</p>
+    <p><strong>Live as of 2026-05-06</strong>: 1 product (<em>BRAC POC RKE2</em>), 1 engagement (<em>trivy-operator-rke2-dc</em>), 213 tests, 1,800 findings (294 High, 549 Medium, 957 Low) — all from Trivy Operator's ConfigAudit reports. Vulnerability + SBOM ingest will populate once Trivy's image-scan Jobs finish their first DB pull.</p>
   </section>
 
   <section class="card">
     <h2>Architecture</h2>
     <p>Five workload pods on DC: Postgres (StatefulSet), Valkey (StatefulSet), Django (Deployment, runs the web UI + REST API as uwsgi behind an nginx sidecar), Celery worker (Deployment, async tasks), Celery beat (Deployment, scheduler). The <code>defectdojo-initializer</code> Job runs Django migrations and creates the admin user on first install.</p>
-    <p>External traffic path: client → DNS <code>defectdojo.apps.sub.comptech-lab.com</code> → 160.30.63.134 (edge HAProxy) → SNI ACL routes to <code>vm-tls-be</code> → 127.0.0.1:8443 (HAProxy TLS terminate with wildcard cert) → <code>defectdojo-rke2-be</code> backend → DC RKE2 ingress on :80 → <code>defectdojo-django</code> Service (the nginx port).</p>
-    <p>v0.1 has DC-only DefectDojo. DR's Trivy Operator bridge CronJob talks to DefectDojo via the public edge URL (cross-cluster), not via in-cluster service DNS.</p>
+    <p>External traffic path: client → DNS <code>defectdojo.apps.sub.comptech-lab.com</code> → 160.30.63.134 (edge HAProxy) → SNI ACL routes to <code>vm-tls-be</code> → 127.0.0.1:8443 (HAProxy TLS terminate with wildcard cert) → <code>defectdojo-rke2-be</code> backend (DC primary, no DR backup yet, healthcheck <code>GET /login</code>) → DC RKE2 ingress on :80 → <code>defectdojo-django</code> Service (the nginx port).</p>
+    <p>The bridge runs in-cluster and talks to DefectDojo over the in-cluster Service DNS (<code>http://defectdojo-django.defectdojo.svc:80</code>) but with an explicit <code>Host: defectdojo.apps.sub.comptech-lab.com</code> header — Django's <code>ALLOWED_HOSTS</code> rejects the bare svc DNS.</p>
+    <p>v0.1 has DC-only DefectDojo. v0.2 adds a DR pair (with cross-cluster Postgres replication and an HAProxy <code>backup</code> server) and a DR-side bridge that talks to DC over the edge URL.</p>
   </section>
 
   <section class="card">
     <h2>Configuration</h2>
     <p>Source: <code>shared/helm-values/defectdojo.yaml</code>. Cluster ingress carries <code>nginx.ingress.kubernetes.io/ssl-redirect: false</code> so the edge HAProxy → cluster :80 hop is not 308'd (same lesson as nexus). Body size uncapped, read/send timeouts bumped to 1800 s for large scan-report uploads.</p>
-    <p><strong>Admin credential</strong> (v0.1 default-admin):</p>
-    <pre><code>kubectl -n defectdojo get secret defectdojo \
-  -o jsonpath='{.data.DD_ADMIN_PASSWORD}' | base64 -d
-</code></pre>
-    <p>Then mirror to <code>~/cloud-init/defectdojo-admin-password</code> (chmod 600). v0.2 hardens by pre-creating the Secret and rotating regularly.</p>
-    <p><strong>API token for the bridge</strong>: log in as admin, top-right user menu → <em>API v2 Key</em> → <em>Generate New Key</em>. Then create the imperative Secret on each cluster:</p>
-    <pre><code>kubectl -n trivy-defectdojo-bridge create secret generic defectdojo-api-token \
-  --from-literal=token=&lt;the-token-value&gt;
-</code></pre>
+    <p><strong>Imperative Secrets</strong> (planted via <code>kubectl create secret</code>, NOT in git, masters at <code>~/cloud-init/defectdojo-{secrets.env,admin-password,api-token}</code> chmod 600):</p>
+    <ul>
+      <li><code>defectdojo</code> (in <code>defectdojo</code> ns) — Django admin + secret-key + AES key. Chart's <code>createSecret: false</code> so Argo doesn't churn it on every sync.</li>
+      <li><code>defectdojo-postgresql-specific</code> (in <code>defectdojo</code> ns) — Postgres user/admin/replication passwords.</li>
+      <li><code>defectdojo-valkey-specific</code> (in <code>defectdojo</code> ns) — Valkey password.</li>
+      <li><code>defectdojo-api-token</code> (in <code>trivy-defectdojo-bridge</code> ns) — DRF v2 token for the bridge.</li>
+    </ul>
+    <p><strong>Why imperative</strong>: chart-managed auto-generated passwords get re-rendered on every Argo sync, but Postgres locks the original password into its data dir on first init — so the running pod and the chart's Secret drift apart immediately. Pre-planting stable values side-steps that.</p>
+    <p><strong>Bridge implementation</strong>: <code>clusters/dc/manifests/trivy-defectdojo-bridge/configmap.yaml</code> ships a Python script (image <code>python:3.12-slim</code>) that lists <code>vulnerabilityreport</code> + <code>configauditreport</code> + <code>exposedsecretreport</code> + <code>sbomreport</code> CRDs via the cluster API and POSTs each item individually to <code>/api/v2/import-scan/</code>. DefectDojo's "Trivy Operator Scan" parser does NOT handle <code>kind: List</code> wrappers — passing the bare <code>kubectl get -o json</code> blob produces 0 findings. Per-item upload is necessary. Each upload also passes <code>product_type_name=Platform</code> (auto-create-context requires it) and a <code>tags=&lt;prefix&gt;:&lt;ns&gt;/&lt;name&gt;</code> tag for traceability.</p>
   </section>
 
   <section class="card">
     <h2>Operations</h2>
     <ul>
-      <li><strong>UI</strong>: <code>https://defectdojo.apps.sub.comptech-lab.com</code></li>
+      <li><strong>UI</strong>: <code>https://defectdojo.apps.sub.comptech-lab.com</code> — log in as <code>admin</code> with the password at <code>~/cloud-init/defectdojo-admin-password</code>.</li>
+      <li><strong>Read admin password from cluster</strong>: <code>kubectl -n defectdojo get secret defectdojo -o jsonpath='{.data.DD_ADMIN_PASSWORD}' | base64 -d</code></li>
       <li><strong>Trigger immediate bridge run</strong>: <code>kubectl -n trivy-defectdojo-bridge create job --from=cronjob/trivy-defectdojo-bridge bridge-now</code></li>
-      <li><strong>List products</strong>: <code>curl -k -H "Authorization: Token $T" https://defectdojo.apps.sub.comptech-lab.com/api/v2/products/?limit=10</code></li>
-      <li><strong>Hand-upload a Trivy scan</strong> (CI flow): see <code>docs/CI-TRIVY-DEFECTDOJO.md</code> in gitops-rke2</li>
+      <li><strong>Tail bridge logs</strong>: <code>kubectl -n trivy-defectdojo-bridge logs -l job-name=bridge-now</code></li>
+      <li><strong>List products via API</strong>: <code>curl -k -H "Authorization: Token $T" https://defectdojo.apps.sub.comptech-lab.com/api/v2/products/?limit=10</code></li>
+      <li><strong>Generate a new API token</strong>: <code>kubectl -n defectdojo exec deploy/defectdojo-django -c uwsgi -- python manage.py drf_create_token admin</code></li>
       <li><strong>Reset admin password</strong>: <code>kubectl -n defectdojo exec deploy/defectdojo-django -c uwsgi -- python manage.py changepassword admin</code></li>
+      <li><strong>Hand-upload a Trivy scan</strong> (CI flow): see <code>docs/CI-TRIVY-DEFECTDOJO.md</code> in gitops-rke2</li>
     </ul>
   </section>
 
