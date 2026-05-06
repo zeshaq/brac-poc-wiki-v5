@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DefectDojo — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+<a class="brand-link" href="/">
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
+  </div>
+</div>
+</a>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity &amp; secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+    <a href="/tools/wso2is.html">WSO2 Identity Server (apps)</a>
+    <a href="/tools/wso2-apim.html">WSO2 API Manager (apps)</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/redis.html">Redis</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD &amp; IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Security</div>
+    <a href="/tools/trivy.html">Trivy Operator</a>
+    <a href="/tools/defectdojo.html" class="active" aria-current="page">DefectDojo</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network &amp; shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="sidebar-foot">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light/dark theme">
+    <span class="theme-toggle-icon" aria-hidden="true">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="theme-toggle-label"></span>
+  </button>
+  <div class="footer-note">v5 · live snapshot</div>
+</div>
+</aside>
+
+<main id="main" class="content">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Catalogue</a> <span class="sep">/</span>
+    <span>Security</span> <span class="sep">/</span>
+    <span class="current">DefectDojo</span>
+  </nav>
+
+  <header class="page-header">
+    <div class="kicker">Security</div>
+    <h1>DefectDojo</h1>
+    <div class="badges"><span class="badge dc">DC</span></div>
+    <p class="lede">Aggregated vulnerability + SBOM dashboard for the platform — receives Trivy Operator findings from both clusters and Jenkins-CI scan results from per-build pipelines.</p>
+  </header>
+
+  <section class="card">
+    <h2>Quick facts</h2>
+    <dl class="meta meta-grid">
+      <dt>Hostname</dt><dd><code>https://defectdojo.apps.sub.comptech-lab.com</code></dd>
+      <dt>Helm chart</dt><dd><code>defectdojo/defectdojo 1.9.25</code> (app 2.58.0)</dd>
+      <dt>Namespace</dt><dd><code>defectdojo</code> on DC only (v0.1)</dd>
+      <dt>Datastore</dt><dd>Embedded Postgres StatefulSet (bitnami subchart) — 20 GiB Longhorn PVC</dd>
+      <dt>Cache / queue</dt><dd>Embedded Valkey StatefulSet — 5 GiB Longhorn PVC</dd>
+      <dt>Components</dt><dd>Django (uwsgi+nginx), Celery worker, Celery beat — single replica each for v0.1</dd>
+      <dt>Admin password</dt><dd>Auto-generated by chart on first install — read from Secret <code>defectdojo</code> key <code>DD_ADMIN_PASSWORD</code></dd>
+      <dt>Edge backend</dt><dd>HAProxy <code>defectdojo-rke2-be</code> (DC primary, no DR backup yet)</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p>OWASP DefectDojo is a security findings management platform: it ingests scan output from many tools (Trivy, Trivy Operator, CycloneDX SBOM, Snyk, Bandit, Burp, ZAP, ...), de-duplicates findings, tracks them through engagements, and surfaces a single dashboard view. Here it is used as the <em>aggregation layer</em> above Trivy: the in-cluster operator on DC and DR both feed into it (via the <code>trivy-defectdojo-bridge</code> CronJob), and the Jenkins CI flow uploads per-build results from each pipeline.</p>
+  </section>
+
+  <section class="card">
+    <h2>Architecture</h2>
+    <p>Five workload pods on DC: Postgres (StatefulSet), Valkey (StatefulSet), Django (Deployment, runs the web UI + REST API as uwsgi behind an nginx sidecar), Celery worker (Deployment, async tasks), Celery beat (Deployment, scheduler). The <code>defectdojo-initializer</code> Job runs Django migrations and creates the admin user on first install.</p>
+    <p>External traffic path: client → DNS <code>defectdojo.apps.sub.comptech-lab.com</code> → 160.30.63.134 (edge HAProxy) → SNI ACL routes to <code>vm-tls-be</code> → 127.0.0.1:8443 (HAProxy TLS terminate with wildcard cert) → <code>defectdojo-rke2-be</code> backend → DC RKE2 ingress on :80 → <code>defectdojo-django</code> Service (the nginx port).</p>
+    <p>v0.1 has DC-only DefectDojo. DR's Trivy Operator bridge CronJob talks to DefectDojo via the public edge URL (cross-cluster), not via in-cluster service DNS.</p>
+  </section>
+
+  <section class="card">
+    <h2>Configuration</h2>
+    <p>Source: <code>shared/helm-values/defectdojo.yaml</code>. Cluster ingress carries <code>nginx.ingress.kubernetes.io/ssl-redirect: false</code> so the edge HAProxy → cluster :80 hop is not 308'd (same lesson as nexus). Body size uncapped, read/send timeouts bumped to 1800 s for large scan-report uploads.</p>
+    <p><strong>Admin credential</strong> (v0.1 default-admin):</p>
+    <pre><code>kubectl -n defectdojo get secret defectdojo \
+  -o jsonpath='{.data.DD_ADMIN_PASSWORD}' | base64 -d
+</code></pre>
+    <p>Then mirror to <code>~/cloud-init/defectdojo-admin-password</code> (chmod 600). v0.2 hardens by pre-creating the Secret and rotating regularly.</p>
+    <p><strong>API token for the bridge</strong>: log in as admin, top-right user menu → <em>API v2 Key</em> → <em>Generate New Key</em>. Then create the imperative Secret on each cluster:</p>
+    <pre><code>kubectl -n trivy-defectdojo-bridge create secret generic defectdojo-api-token \
+  --from-literal=token=&lt;the-token-value&gt;
+</code></pre>
+  </section>
+
+  <section class="card">
+    <h2>Operations</h2>
+    <ul>
+      <li><strong>UI</strong>: <code>https://defectdojo.apps.sub.comptech-lab.com</code></li>
+      <li><strong>Trigger immediate bridge run</strong>: <code>kubectl -n trivy-defectdojo-bridge create job --from=cronjob/trivy-defectdojo-bridge bridge-now</code></li>
+      <li><strong>List products</strong>: <code>curl -k -H "Authorization: Token $T" https://defectdojo.apps.sub.comptech-lab.com/api/v2/products/?limit=10</code></li>
+      <li><strong>Hand-upload a Trivy scan</strong> (CI flow): see <code>docs/CI-TRIVY-DEFECTDOJO.md</code> in gitops-rke2</li>
+      <li><strong>Reset admin password</strong>: <code>kubectl -n defectdojo exec deploy/defectdojo-django -c uwsgi -- python manage.py changepassword admin</code></li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Failover</h2>
+    <p>v0.1 is DC-only. If DC's RKE2 cluster goes down, DefectDojo becomes unreachable until restored — DR has no DefectDojo and no replica of the Postgres data. Trivy Operator on each cluster keeps emitting CRDs locally; aggregation pauses. v0.2 adds a DR pair (with cross-cluster Postgres replication, e.g., the same logical-export pattern Vault uses) and an HAProxy <code>backup</code> server.</p>
+  </section>
+
+  <section class="card">
+    <h2>References</h2>
+    <ul>
+      <li><a href="https://documentation.defectdojo.com/">DefectDojo documentation</a></li>
+      <li><a href="https://documentation.defectdojo.com/integrations/parsers/file/trivy-operator/">DefectDojo Trivy Operator parser</a></li>
+      <li>Helm chart: <code>defectdojo/defectdojo 1.9.25</code></li>
+      <li>Source: <code>shared/helm-values/defectdojo.yaml</code> and <code>clusters/dc/values/defectdojo.yaml</code></li>
+    </ul>
+  </section>
+
+  <nav class="page-nav" aria-label="Adjacent tools">
+    <a class="prev" href="/tools/trivy.html" rel="prev">← Trivy Operator</a>
+    <a class="next" href="/tools/haproxy.html" rel="next">HAProxy (edge) →</a>
+  </nav>
+
+</main>
+
+<script>
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
+</script>
+<script>
+  (function(){
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>

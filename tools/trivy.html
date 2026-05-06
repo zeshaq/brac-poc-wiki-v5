@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trivy Operator — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+
+<aside class="sidebar" aria-label="Site navigation">
+<a class="brand-link" href="/">
+<div class="brand">
+  <div class="brand-mark">B</div>
+  <div>
+    <div class="brand-title">BRAC POC</div>
+    <div class="brand-sub">DC / DR tools</div>
+  </div>
+</div>
+</a>
+<nav class="nav">
+  <div class="nav-group">
+    <div class="nav-heading">Catalogue</div>
+    <a href="/">Overview</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Foundation</div>
+    <a href="/tools/argocd.html">Argo CD</a>
+    <a href="/tools/cert-manager.html">cert-manager</a>
+    <a href="/tools/longhorn.html">Longhorn</a>
+    <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Identity &amp; secrets</div>
+    <a href="/tools/keycloak.html">Keycloak</a>
+    <a href="/tools/vault.html">HashiCorp Vault</a>
+    <a href="/tools/wso2is.html">WSO2 Identity Server (apps)</a>
+    <a href="/tools/wso2-apim.html">WSO2 API Manager (apps)</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
+    <a href="/tools/strimzi.html">Strimzi operator</a>
+    <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
+  </div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/redis.html">Redis</a>
+    <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
+    <a href="/tools/redis-applier.html">redis-applier</a>
+    <a href="/tools/redisinsight.html">RedisInsight</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">CI / CD &amp; IaC</div>
+    <a href="/tools/nexus.html">Sonatype Nexus 3</a>
+    <a href="/tools/jenkins.html">Jenkins</a>
+    <a href="/tools/awx.html">Ansible AWX</a>
+    <a href="/tools/terrakube.html">Terrakube</a>
+    <a href="/tools/gitlab.html">GitLab</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Observability</div>
+    <a href="/tools/signoz.html">SigNoz</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Security</div>
+    <a href="/tools/trivy.html" class="active" aria-current="page">Trivy Operator</a>
+    <a href="/tools/defectdojo.html">DefectDojo</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-heading">Edge / network &amp; shared</div>
+    <a href="/tools/haproxy.html">HAProxy (edge)</a>
+    <a href="/tools/pdns.html">PowerDNS</a>
+    <a href="/tools/minio.html">MinIO</a>
+  </div>
+</nav>
+<div class="sidebar-foot">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light/dark theme">
+    <span class="theme-toggle-icon" aria-hidden="true">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="theme-toggle-label"></span>
+  </button>
+  <div class="footer-note">v5 · live snapshot</div>
+</div>
+</aside>
+
+<main id="main" class="content">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Catalogue</a> <span class="sep">/</span>
+    <span>Security</span> <span class="sep">/</span>
+    <span class="current">Trivy Operator</span>
+  </nav>
+
+  <header class="page-header">
+    <div class="kicker">Security</div>
+    <h1>Trivy Operator</h1>
+    <div class="badges"><span class="badge dc">DC</span><span class="badge dr">DR</span></div>
+    <p class="lede">Continuous in-cluster vulnerability, configuration, secret, and SBOM scanning. Findings flow to DefectDojo via the trivy-defectdojo-bridge CronJob.</p>
+  </header>
+
+  <section class="card">
+    <h2>Quick facts</h2>
+    <dl class="meta meta-grid">
+      <dt>Helm chart</dt><dd><code>aquasecurity/trivy-operator 0.32.1</code> (app 0.30.1)</dd>
+      <dt>Namespace</dt><dd><code>trivy-system</code> on DC + DR</dd>
+      <dt>Mode</dt><dd><code>Standalone</code> — each scan job pulls its own vuln DB. v0.2 switches to ClientServer with a centralised Trivy server.</dd>
+      <dt>Scanners enabled</dt><dd>Vulnerability, ConfigAudit, ExposedSecret, RBACAssessment, InfraAssessment, SBOM</dd>
+      <dt>Skip-namespaces</dt><dd><code>kube-system, kube-public, kube-node-lease, argocd, longhorn-system, cert-manager, trivy-system, defectdojo</code></dd>
+      <dt>Report TTL</dt><dd>168h (7d)</dd>
+      <dt>Bridge to dashboard</dt><dd>CronJob <code>trivy-defectdojo-bridge</code> in ns <code>trivy-defectdojo-bridge</code>, hourly</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>What it is</h2>
+    <p>The Trivy Operator runs as a controller in <code>trivy-system</code> and watches every workload in scope. On pod creation (or scheduled re-scan) it kicks off short-lived Jobs that run <code>aquasec/trivy</code> against the pod's image and Kubernetes manifest, then writes findings as CRDs (<code>VulnerabilityReport</code>, <code>ConfigAuditReport</code>, <code>ExposedSecretReport</code>, <code>SbomReport</code>, <code>RbacAssessmentReport</code>, <code>InfraAssessmentReport</code>). Reports are namespaced and visible via <code>kubectl get vulnerabilityreport -A</code>.</p>
+    <p>The CRDs are a structured view, but they are not the canonical "Trivy JSON" that other tooling expects. DefectDojo's <code>Trivy Operator Scan</code> parser (DD 2.x+) accepts the <em>raw <code>kubectl get vulnerabilityreport -o json</code> output</em>, so the bridge does not need to convert anything — it just lists the CRDs and POSTs the JSON blob.</p>
+  </section>
+
+  <section class="card">
+    <h2>Architecture</h2>
+    <p>Single Deployment (the operator) on each cluster. No DaemonSet for v0.1 (the optional <code>node-collector</code> DaemonSet — which mounts host paths to do CIS/NSA compliance — is disabled). Per-image scans run as transient Jobs scheduled by the operator with a concurrency limit of 5 at a time and a 30 s retry delay; results land in the workload's own namespace.</p>
+    <p>The <em>data flow</em>: Pod created → Operator schedules scan Job → Trivy container in Job downloads vuln DB and SBOM-extracts the image → writes CRD in workload namespace → bridge CronJob (next hour) lists all CRDs and uploads to DefectDojo, where the <code>Trivy Operator Scan</code> parser splits findings into per-image components.</p>
+  </section>
+
+  <section class="card">
+    <h2>Configuration</h2>
+    <p>Source: <code>shared/helm-values/trivy-operator.yaml</code> + per-cluster overlays in <code>clusters/{dc,dr}/values/trivy-operator.yaml</code> (currently empty — both clusters scan everything by the same rules).</p>
+    <p>Persistence: a 10 GiB <code>longhorn-r2</code> PVC mounted by the scanner Jobs to cache the Trivy vuln DB across runs. Without this, every Job re-downloads ~150 MB of DB.</p>
+    <p>Excluded namespaces are an explicit list (not a label selector) so platform internals don't pollute reports. The exclusion includes <code>defectdojo</code> because we don't need DefectDojo to scan itself for v0.1.</p>
+  </section>
+
+  <section class="card">
+    <h2>Operations</h2>
+    <ul>
+      <li><strong>List recent vulnerability reports</strong>: <code>kubectl get vulnerabilityreport -A</code></li>
+      <li><strong>Inspect one</strong>: <code>kubectl describe vulnerabilityreport -n &lt;ns&gt; &lt;name&gt;</code> (each report has a <code>report.summary</code> with severity counts plus <code>report.vulnerabilities[]</code>)</li>
+      <li><strong>SBOMs</strong>: <code>kubectl get sbomreport -A</code> — each carries an embedded CycloneDX SBOM under <code>spec.components</code>, <code>spec.bom</code></li>
+      <li><strong>Trigger a re-scan</strong> for a workload: bump the workload's pod-template hash (any spec change) — the operator detects and rescans</li>
+      <li><strong>Force-run the bridge</strong>: <code>kubectl -n trivy-defectdojo-bridge create job --from=cronjob/trivy-defectdojo-bridge bridge-now</code></li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Failover</h2>
+    <p>Independent per cluster — DC and DR each run their own operator and scan their own workloads. Reports are local to each cluster's etcd; cross-cluster aggregation happens only at the DefectDojo dashboard layer (the bridge CronJob in each cluster uploads to the same DefectDojo instance, with engagements <code>trivy-operator-rke2-dc</code> and <code>trivy-operator-rke2-dr</code>).</p>
+    <p>If DC's cluster goes down, DR's reports keep flowing into DefectDojo (DR bridge talks to DefectDojo over the public edge URL). If DefectDojo itself goes down, no aggregation happens until it's back; CRDs persist locally either way.</p>
+  </section>
+
+  <section class="card">
+    <h2>References</h2>
+    <ul>
+      <li><a href="https://aquasecurity.github.io/trivy-operator/latest/">Trivy Operator docs</a></li>
+      <li><a href="https://aquasecurity.github.io/trivy/latest/docs/configuration/db/">Trivy DB configuration</a></li>
+      <li>memory: <code>shared/helm-values/trivy-operator.yaml</code> (in gitops-rke2)</li>
+      <li>Bridge: <code>clusters/{dc,dr}/manifests/trivy-defectdojo-bridge/</code></li>
+    </ul>
+  </section>
+
+  <nav class="page-nav" aria-label="Adjacent tools">
+    <a class="prev" href="/tools/signoz.html" rel="prev">← SigNoz</a>
+    <a class="next" href="/tools/defectdojo.html" rel="next">DefectDojo →</a>
+  </nav>
+
+</main>
+
+<script>
+  document.querySelectorAll('.nav a').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h === location.pathname || h + 'index.html' === location.pathname || h === location.pathname.replace(/\/$/, '')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    }
+  });
+</script>
+<script>
+  (function(){
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
