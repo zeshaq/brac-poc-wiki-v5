@@ -5,11 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SigNoz — BRAC POC tools</title>
 <link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
 <a href="#main" class="skip">Skip to content</a>
 
 <aside class="sidebar" aria-label="Site navigation">
+<a class="brand-link" href="/">
 <div class="brand">
   <div class="brand-mark">B</div>
   <div>
@@ -17,6 +27,7 @@
     <div class="brand-sub">DC / DR tools</div>
   </div>
 </div>
+</a>
 <nav class="nav">
   <div class="nav-group">
     <div class="nav-heading">Catalogue</div>
@@ -30,14 +41,13 @@
     <a href="/tools/webhook-pdns.html">webhook-pdns (cert-manager)</a>
   </div>
   <div class="nav-group">
-    <div class="nav-heading">Identity & secrets</div>
+    <div class="nav-heading">Identity &amp; secrets</div>
     <a href="/tools/keycloak.html">Keycloak</a>
     <a href="/tools/vault.html">HashiCorp Vault</a>
   </div>
-  <div class="nav-group">
-    <div class="nav-heading">Data & streaming</div>
+  <div class="nav-group sub-nav">
+    <a class="nav-heading-link" href="/tools/kafka.html">Kafka</a>
     <a href="/tools/strimzi.html">Strimzi operator</a>
-    <a href="/tools/kafka.html">Apache Kafka (KRaft)</a>
     <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>
     <a href="/tools/redis-operator.html">Redis operator (Spotahome)</a>
     <a href="/tools/redis.html">Redis (RedisFailover)</a>
@@ -45,7 +55,7 @@
     <a href="/tools/redisinsight.html">RedisInsight</a>
   </div>
   <div class="nav-group">
-    <div class="nav-heading">CI / CD & IaC</div>
+    <div class="nav-heading">CI / CD &amp; IaC</div>
     <a href="/tools/nexus.html">Sonatype Nexus 3</a>
     <a href="/tools/jenkins.html">Jenkins</a>
     <a href="/tools/awx.html">Ansible AWX</a>
@@ -57,13 +67,22 @@
     <a href="/tools/signoz.html" class="active" aria-current="page">SigNoz</a>
   </div>
   <div class="nav-group">
-    <div class="nav-heading">Edge / network & shared</div>
+    <div class="nav-heading">Edge / network &amp; shared</div>
     <a href="/tools/haproxy.html">HAProxy (edge)</a>
     <a href="/tools/pdns.html">PowerDNS</a>
     <a href="/tools/minio.html">MinIO</a>
   </div>
 </nav>
-<div class="footer-note">v5 · live snapshot</div>
+<div class="sidebar-foot">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light/dark theme">
+    <span class="theme-toggle-icon" aria-hidden="true">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="theme-toggle-label"></span>
+  </button>
+  <div class="footer-note">v5 · live snapshot</div>
+</div>
 </aside>
 
 <main id="main" class="content">
@@ -136,6 +155,18 @@
       a.setAttribute('aria-current', 'page');
     }
   });
+</script>
+<script>
+  (function(){
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
 </script>
 </body>
 </html>
