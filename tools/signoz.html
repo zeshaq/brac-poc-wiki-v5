@@ -119,18 +119,19 @@
 
   <section class="card">
     <h2>What it is</h2>
-    <p>Used for traces and metrics from in-cluster workloads. The cosmetic OutOfSync in Argo CD is the K8s API-server adding default fields (schedulerName, dnsPolicy, terminationGracePeriodSeconds, etc.) that aren't in the source manifests; functionally the install is healthy.</p>
+    <p>Used for traces and metrics from in-cluster workloads. URL <code>https://signoz.apps.sub.comptech-lab.com</code> live (HTTP 200) on both DC and DR after the 2026-05-06 ingress-backend fix (see <em>Operations</em>). Argo Application is OutOfSync due to a wedged sync waiting on a pruned <code>signoz-zookeeper</code> StatefulSet — pending an <code>argocd app terminate-op</code>; functional state is healthy.</p>
   </section>
 
   <section class="card">
     <h2>Architecture</h2>
-    <p>Per-cluster install. Components: <code>frontend</code> (the SigNoz web UI, Apache nginx serving the React SPA), <code>query-service</code> (Go backend reading from ClickHouse), <code>otel-collector</code> + <code>otel-collector-metrics</code> (OpenTelemetry receivers + processors writing into ClickHouse), and a single-node <code>clickhouse</code> StatefulSet on Longhorn.</p>
-    <p>The "no ZK" profile drops Zookeeper that the older SigNoz layouts required for ClickHouse coordination — single-node ClickHouse doesn't need it. We had a previous deploy with ZK that left orphan ConfigMaps; Argo's diff against those is the source of the cosmetic OutOfSync (MR #7-#8).</p>
+    <p>Per-cluster install via the official <code>signoz/signoz</code> chart (v0.81.0, app v0.84.0). Chart 0.81.0 collapses the historical <code>frontend</code> + <code>query-service</code> split into a single <code>signoz</code> StatefulSet that exposes ports <code>8080</code> (HTTP UI + API), <code>8085</code> (internal), <code>4320</code> (OpAMP). The <code>otel-collector</code> Deployment runs separately and writes into a single-node <code>clickhouse</code> StatefulSet on Longhorn.</p>
+    <p>The "no ZK" profile sets <code>clickhouse.zookeeper.enabled: false</code>; single-node ClickHouse doesn't need it. An earlier deploy ran with ZK enabled — when ZK was disabled and Argo pruned the resources, the in-flight sync's "wait for healthy" loop is now permanently stuck on the missing <code>signoz-zookeeper</code> SS. Pending follow-up.</p>
   </section>
 
   <section class="card">
     <h2>Configuration</h2>
-    <p>Source: <code>clusters/&lt;cluster&gt;/manifests/signoz/</code> — raw manifests adapted from the SigNoz Helm chart values, simplified for the lab's single-node ClickHouse.</p>
+    <p>Source: chart <code>signoz/signoz</code> v0.81.0 from <code>https://charts.signoz.io</code>, with values from <code>shared/helm-values/signoz.yaml</code> + <code>clusters/&lt;cluster&gt;/values/signoz.yaml</code>. Ingress is provisioned out-of-band at <code>clusters/&lt;cluster&gt;/manifests/signoz/ingress.yaml</code> (<code>frontendIngress.enabled: false</code> in chart values) so cert-manager <code>Certificate</code> ordering stays explicit.</p>
+    <p><strong>Ingress backend</strong>: <code>signoz</code> Service on port <code>8080</code> (HTTP). Earlier the manifest pointed at the non-existent <code>signoz-frontend:3301</code> (a stale name from the pre-0.81 chart layout), which caused the URL to 503 — fixed in MR !51 (2026-05-06).</p>
     <p>Receivers exposed: OTLP gRPC (4317), OTLP HTTP (4318), Jaeger Thrift (14268). Apps in the cluster send traces and metrics by setting <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> at <code>http://otel-collector.signoz:4317</code>.</p>
     <p>No OIDC integration today — the SigNoz UI uses its own user database. Auth-via-Keycloak is on the wishlist.</p>
   </section>
@@ -138,7 +139,7 @@
   <section class="card">
     <h2>Operations</h2>
     <ul>
-      <li><strong>UI</strong>: <code>https://signoz.apps.sub.comptech-lab.com</code> on whichever cluster is fronted; per-cluster instances with no DC-primary/DR-backup edge backend yet.</li>
+      <li><strong>UI</strong>: <code>https://signoz.apps.sub.comptech-lab.com</code> — verified HTTP 200 on DC (30.30.30.2) and DR (30.30.31.1) after MR !51 (2026-05-06). Per-cluster instances with no DC-primary/DR-backup edge backend yet.</li>
       <li><strong>ClickHouse direct query</strong>: <code>kubectl -n signoz exec clickhouse-0 -- clickhouse-client --query "SHOW TABLES FROM signoz_traces"</code></li>
       <li><strong>Inspect collector receiver health</strong>: <code>kubectl -n signoz logs deploy/otel-collector | head</code></li>
       <li><strong>Send a test trace</strong>: <code>otelgen</code> or any otel-cli pointed at the OTLP endpoint inside the cluster.</li>
@@ -157,6 +158,7 @@
     <ul>
       <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2/-/tree/main/clusters/dc/manifests/signoz">GitOps: <code>clusters/dc/manifests/signoz/</code></a></li>
       <li>MR #7-#8 (no-ZK rollout)</li>
+      <li>MR !51 (ingress backend fix: <code>signoz-frontend:3301</code> → <code>signoz:8080</code>, 2026-05-06)</li>
       <li>ADR-0013 (SigNoz on spoke-dc — historical RHACM context, unrelated to RKE2 lab)</li>
       <li><a href="https://signoz.io/docs/">SigNoz docs</a> · <a href="https://opentelemetry.io/docs/">OpenTelemetry</a></li>
     </ul>
