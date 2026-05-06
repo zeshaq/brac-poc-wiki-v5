@@ -60,6 +60,25 @@
   --shadow: 0 1px 0 rgba(0,0,0,0.02), 0 8px 22px -10px rgba(15,23,42,0.18);
 }
 
+/* Sidebar always renders in dark colors, regardless of page theme.
+   We re-scope the dark values onto custom properties inside .sidebar
+   so all descendants (brand, nav links, theme toggle, footer) inherit
+   the dark palette via the same vars they already reference. */
+[data-theme="light"] .sidebar {
+  --bg-elev: #11151a;
+  --bg-card: #141a21;
+  --border: #1f2731;
+  --border-strong: #2a3441;
+  --text: #e6edf3;
+  --text-dim: #9aa7b3;
+  --text-mute: #6b7785;
+  --accent: #5cc8ff;
+  --accent-2: #7ee7d3;
+  --accent-bg: rgba(92,200,255,0.08);
+  --hover-overlay: rgba(255,255,255,0.04);
+  --hover-overlay-soft: rgba(255,255,255,0.02);
+}
+
 * { box-sizing: border-box; }
 
 html, body {
