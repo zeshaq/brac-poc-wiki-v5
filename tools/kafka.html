@@ -80,47 +80,207 @@
     <p class="lede">3 brokers + 3 controllers in KRaft mode per cluster — backbone of the cross-cluster replication path.</p>
   </header>
 
+  <h2 class="section-rule">Overview</h2>
   <section class="card">
-    <h2>Quick facts</h2>
+    <p>Kafka is the streaming substrate for the platform. Two independent KRaft clusters (one per RKE2 cluster, three brokers + three controllers each) carry the Redis WAL (ADR-0018), MirrorMaker 2 cross-cluster replication, and any application that needs durable, ordered, replayable messaging. The two clusters know nothing about each other at the metadata layer — replication happens on top, at the topic layer, by MirrorMaker 2 running on DR.</p>
+    <p>Both clusters are managed by Strimzi (operator 0.46.1 reconciling a <code>Kafka</code> custom resource per cluster). External clients reach Kafka through the edge HAProxy by SNI on port <strong>443</strong>, so the same FQDN set works against either side and clients can fail over at the TCP layer with no DNS changes.</p>
     <dl class="meta meta-grid">
       <dt>Mode</dt><dd>KRaft (no ZooKeeper)</dd>
-      <dt>Topology</dt><dd>3 brokers + 3 controllers</dd>
-      <dt>Internal listener</dt><dd><code>scram</code> on 9095 (TLS + SCRAM-SHA-512)</dd>
-      <dt>External listener</dt><dd>Bootstrap + per-broker on 443 via SNI</dd>
-      <dt>AuthN/Z</dt><dd>SCRAM-SHA-512 + Strimzi simple authz; ANONYMOUS superuser on DR for MM2</dd>
-      <dt>Carrier topic</dt><dd><code>redis-writes</code> (Redis WAL pattern, ADR-0018)</dd>
+      <dt>Topology per cluster</dt><dd>3 broker pods + 3 controller pods (Strimzi <code>KafkaNodePool</code>s)</dd>
+      <dt>Operator</dt><dd><a href="/tools/strimzi.html">Strimzi</a> 0.46.1, watching the <code>kafka</code> namespace</dd>
+      <dt>Internal listener</dt><dd><code>scram</code> on port 9095, TLS + SASL/SCRAM-SHA-512</dd>
+      <dt>External listener</dt><dd>Bootstrap + per-broker on port 443 via SNI passthrough on the edge HAProxy</dd>
+      <dt>AuthN / AuthZ</dt><dd>SCRAM-SHA-512 + Strimzi <code>simple</code> authorization (per-<code>KafkaUser</code> ACLs)</dd>
+      <dt>DR-only quirk</dt><dd><code>ANONYMOUS</code> super-user on DR so the MirrorMaker 2 bootstrap path completes</dd>
+      <dt>Cross-cluster replication</dt><dd><a href="/tools/mirrormaker2.html">MirrorMaker 2</a> on DR, pulling from DC</dd>
+      <dt>Carrier topics</dt><dd><code>redis-writes</code> (Redis WAL — ADR-0018), <code>jboss.*</code> (external JBoss app)</dd>
+      <dt>External smoke</dt><dd>Validated end-to-end via <code>kcat</code> on 2026-05-06 (produce, consume, ACL deny)</dd>
     </dl>
   </section>
 
+  <h2 class="section-rule">The Kafka cluster (per side)</h2>
   <section class="card">
-    <h2>What it is</h2>
-    <p>The two clusters are independent Kafka deployments. Cross-cluster delivery is via MirrorMaker 2 running on DR. External off-cluster clients reach Kafka via the edge HAProxy by SNI to <code>bootstrap.kafka.apps.sub.comptech-lab.com:443</code> and <code>broker-{0,1,2}.kafka.apps.sub.comptech-lab.com:443</code>.</p>
+    <h3>Topology</h3>
+    <p>Each cluster is a self-contained KRaft Kafka. Strimzi reconciles two <code>KafkaNodePool</code>s — three brokers and three controllers — into <code>StrimziPodSet</code>s, plus the supporting Services, Secrets (cluster CA, clients CA, SCRAM credentials), and ConfigMaps. There is no ZooKeeper.</p>
+    <pre><code>┌── one Kafka cluster (DC or DR) ─────────────────────────────┐
+│                                                             │
+│   ┌────────────┐  ┌────────────┐  ┌────────────┐            │
+│   │ controller │  │ controller │  │ controller │  KRaft     │
+│   │   pod 0    │  │   pod 1    │  │   pod 2    │  metadata  │
+│   └─────┬──────┘  └─────┬──────┘  └─────┬──────┘            │
+│         │               │               │                   │
+│         └───────────────┼───────────────┘                   │
+│                         │ Raft                              │
+│   ┌────────────┐  ┌─────┴──────┐  ┌────────────┐            │
+│   │   broker   │  │   broker   │  │   broker   │  topics +  │
+│   │   pod 0    │  │   pod 1    │  │   pod 2    │  partitions│
+│   └────────────┘  └────────────┘  └────────────┘            │
+│         ▲                                                   │
+│         │  in-cluster clients  (scram, :9095, TLS+SCRAM)    │
+│         │                                                   │
+│         │  off-cluster clients (SNI on :443 via edge — see  │
+│         │                       "External access" below)    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+
+    <h3>Listeners</h3>
+    <p>Two listeners are exposed from each broker:</p>
+    <ul>
+      <li><strong>Internal</strong> — <code>name: scram</code>, port <strong>9095</strong>, TLS + SASL/SCRAM-SHA-512. Used by every in-cluster client (MirrorMaker 2, redis-applier, any namespace-local consumer). Reachability is constrained by a NetworkPolicy in the <code>kafka</code> namespace.</li>
+      <li><strong>External</strong> — <code>name: external</code>, type <code>ingress</code>, container port <strong>9094</strong>, TLS + SASL/SCRAM-SHA-512, but <em>advertised on port 443</em>. Per-broker host overrides give every broker its own DNS name (<code>broker-0</code>, <code>broker-1</code>, <code>broker-2</code>) plus a shared <code>bootstrap</code> name, all under <code>kafka.apps.sub.comptech-lab.com</code>.</li>
+    </ul>
+    <p>The "advertised port 443" detail is what makes the external path work. Clients ask the bootstrap broker for cluster metadata, and the broker tells them which <code>host:port</code> to talk to next. If the advertised port doesn't match the port that's actually open through the edge, the client follows the metadata into a closed door. We hit that exact bug — clients were redirected to <code>:9094</code>, which the edge doesn't expose — until <code>configuration.brokers[*].advertisedPort</code> was changed to <code>443</code>.</p>
+    <p>For the TLS handshake to reach the broker unchanged, ingress-nginx is started with <code>--enable-ssl-passthrough=true</code>. HAProxy never decrypts; it routes by SNI and forwards the bytes.</p>
+
+    <h3>AuthN, AuthZ, and KafkaUsers</h3>
+    <p>Authentication is SCRAM-SHA-512 on both listeners. Authorization is Strimzi <code>simple</code> (Kafka's <code>StandardAuthorizer</code>); ACLs are declared on each <code>KafkaUser</code> resource, not in a global ACL list, so the GitOps definition of an identity carries its permissions with it.</p>
+    <p>Today's identities (one Strimzi <code>KafkaUser</code> per cluster):</p>
+    <ul>
+      <li><code>mm2</code> — used by MirrorMaker 2. Broad ACLs (it replicates whole topics).</li>
+      <li><code>redis-applier</code> — Read on <code>redis-writes</code> + on the <code>redis-applier</code> consumer-group prefix. Used by the in-cluster <a href="/tools/redis-applier.html">redis-applier</a>.</li>
+      <li><code>jboss-client</code> — external JBoss application identity. SCRAM password is shared across DC and DR, delivered via a pre-created <code>Secret</code> that Strimzi consumes when materialising the SCRAM credential record. ACLs: Read/Write/Describe/Create on the <code>jboss.</code> topic prefix, Read on the <code>jboss.</code> consumer-group prefix, <code>IdempotentWrite</code> on the cluster.</li>
+    </ul>
+    <p>DR-only quirk: an <code>ANONYMOUS</code> entry is configured as a <code>super.user</code> on the DR cluster so MirrorMaker 2's auth handshake completes during the cross-cluster bootstrap sequence. Scoped to DR; not present on DC.</p>
+
+    <h3>Certificate hierarchy</h3>
+    <p>Strimzi runs its own per-cluster certificate hierarchy: a <strong>cluster CA</strong> (signs broker server certs and the listener TLS material) and a <strong>clients CA</strong> (signs <code>KafkaUser</code> client certs when mTLS auth is used). Both are auto-rotated roughly every 365 days. The current pair was issued 2026-05-04 and expires 2027-05-04; external clients must refresh their truststore before that or TLS handshakes will start failing.</p>
   </section>
 
-  <section class="card placeholder">
-    <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+  <h2 class="section-rule">External access via the edge</h2>
+  <section class="card">
+    <p>Off-cluster clients (Java/JBoss apps on BRAC spoke networks, <code>kcat</code> on the lab host, anything outside the RKE2 clusters) reach Kafka through the edge HAProxy. The path is pure TCP + SNI passthrough — HAProxy never decrypts the TLS, it just reads the Server Name Indication and forwards the original handshake to ingress-nginx, which forwards it to the broker.</p>
+    <pre><code>client                          edge HAProxy           ingress-nginx          Strimzi
+                                (br30, public)         (in cluster)            broker
+  │                                   │                      │                    │
+  │── TLS ClientHello ───────────────▶│                      │                    │
+  │   SNI: bootstrap.kafka.apps...    │                      │                    │
+  │                                   │── reads SNI ────┐    │                    │
+  │                                   │   matches ACL ──┘    │                    │
+  │                                   │── TCP forward ──────▶│                    │
+  │                                   │   to DC ingress      │                    │
+  │                                   │   (DR backend in     │── ssl-passthrough ▶│
+  │                                   │    "backup", only    │                    │
+  │                                   │    used if DC down)  │                    │
+  │                                   │                      │                    │
+  │── TLS handshake reaches broker ──────────────────────────────────────────────▶│
+  │── SASL/SCRAM-SHA-512 ─────────────────────────────────────────────────────────▶│
+  │── Kafka protocol ─────────────────────────────────────────────────────────────▶│</code></pre>
+
+    <h3>HAProxy frontend &amp; backend</h3>
+    <p>The shared HTTPS frontend (<code>public-apps-https</code>) carries four SNI ACLs that match <code>bootstrap.kafka.apps.sub.comptech-lab.com</code> and <code>broker-{0,1,2}.kafka.apps.sub.comptech-lab.com</code>, sending matched traffic to the <code>kafka-rke2-be</code> backend.</p>
+    <ul>
+      <li><code>mode tcp</code>, <code>balance roundrobin</code>, <code>option tcp-check</code>.</li>
+      <li>3 DC servers active + 3 DR servers marked <code>backup</code> — DR only takes traffic when DC is L4-down.</li>
+      <li>Stats page shows all 6 servers L4OK in steady state.</li>
+    </ul>
+
+    <h3>DNS</h3>
+    <p>PowerDNS holds explicit A records for <code>bootstrap</code>, <code>broker-0</code>, <code>broker-1</code>, and <code>broker-2</code> under <code>kafka.apps.sub.comptech-lab.com</code>, all pointing to the edge IP. The wildcard <code>*.apps</code> doesn't synthesise for these nested labels (RFC 4592 — empty non-terminal), so the explicit records are required.</p>
   </section>
 
-  <section class="card placeholder">
-    <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+  <h2 class="section-rule">Cross-cluster replication (MirrorMaker 2)</h2>
+  <section class="card">
+    <p>Topic data continuity across clusters is provided by <a href="/tools/mirrormaker2.html">MirrorMaker 2</a>, which runs as a single Strimzi-managed <code>KafkaMirrorMaker2</code> resource on the DR cluster's <code>kafka</code> namespace. MM2 pulls from DC and applies to DR, preserving offsets via the standard <code>mm2-offset-syncs.&lt;source&gt;.internal</code> topic.</p>
+    <p>The DC cluster does not run MM2 — replication is one-directional today. If DC fails and DR takes over writes, those writes do not flow back to DC when DC recovers; reconciliation is manual.</p>
+
+    <h3>What is replicated</h3>
+    <ul>
+      <li><code>redis-writes</code> — the Redis WAL (ADR-0018). Mirrored continuously, partition keys preserved so per-key order is the same on both sides.</li>
+      <li><strong>Not currently mirrored:</strong> <code>jboss.*</code>. The external JBoss app's edge auth path is failover-aware (same SCRAM creds, both CA certs trusted, edge HAProxy routes DC-primary/DR-backup), but its topic data is not. If data continuity matters for that app, add <code>jboss\..*</code> to the MM2 include list.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
-    <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+  <h2 class="section-rule">Client guidance</h2>
+  <section class="card">
+    <h3>In-cluster clients</h3>
+    <p>Use the internal listener:</p>
+    <ul>
+      <li><strong>Bootstrap:</strong> the Strimzi-managed bootstrap Service in the <code>kafka</code> namespace, port <code>9095</code>.</li>
+      <li><strong>Security:</strong> <code>SASL_SSL</code> + <code>SCRAM-SHA-512</code>. Mount the user's auto-generated <code>KafkaUser</code> Secret for credentials and the <code>kafka-cluster-ca-cert</code> Secret for the truststore.</li>
+      <li><strong>Authorization:</strong> ACLs are declared on the <code>KafkaUser</code>. Don't bypass authz by adding a user to <code>super.users</code> — write a real ACL.</li>
+    </ul>
+
+    <h3>Off-cluster clients</h3>
+    <p>Use the external listener via the edge HAProxy:</p>
+    <ul>
+      <li><strong>Bootstrap:</strong> <code>bootstrap.kafka.apps.sub.comptech-lab.com:443</code>.</li>
+      <li><strong>Security:</strong> <code>SASL_SSL</code> + <code>SCRAM-SHA-512</code>.</li>
+      <li><strong>Truststore:</strong> a combined PEM containing both cluster CAs (concatenated DC + DR <code>ca.crt</code>). With both CAs trusted, the same client config validates against either side on failover.</li>
+      <li><strong>Identity:</strong> a <code>KafkaUser</code> with the same SCRAM password on both clusters. Pre-create a Secret holding the password and let Strimzi consume it; clients hold one password and target either side.</li>
+      <li><strong>Refresh annually.</strong> Strimzi rotates each cluster CA roughly every 365 days. The combined PEM must be regenerated before the earlier of the two CAs expires (currently 2027-05-04).</li>
+    </ul>
+
+    <h3>Quick smoke test (kcat)</h3>
+    <pre><code>kcat -b bootstrap.kafka.apps.sub.comptech-lab.com:443 \
+     -X security.protocol=SASL_SSL \
+     -X sasl.mechanism=SCRAM-SHA-512 \
+     -X sasl.username=&lt;user&gt; \
+     -X sasl.password=&lt;password&gt; \
+     -X ssl.ca.location=&lt;combined-ca.pem&gt; \
+     -L</code></pre>
+    <p>This was the validation path on 2026-05-06: produce to <code>jboss.smoke</code>, consume the message back, confirm an ACL-denied read of an unrelated topic returns <code>TopicAuthorizationException</code>.</p>
   </section>
 
-  <section class="card placeholder">
-    <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+  <h2 class="section-rule">Evaluation</h2>
+  <section class="card callout-strength">
+    <h3>Strengths</h3>
+    <ul>
+      <li><strong>KRaft removes a moving part.</strong> No ZooKeeper to operate, deploy, secure, or fail. Metadata lives in a Raft quorum on the controller pods.</li>
+      <li><strong>Operator-driven lifecycle.</strong> Strimzi handles broker rolling restarts, certificate rotation, KafkaUser provisioning, ACLs, topic configuration. Day-to-day Kafka admin is mostly editing GitOps YAML.</li>
+      <li><strong>Same FQDNs work in both clusters.</strong> External clients use a single bootstrap name and per-broker names; failover happens at L4 on the edge, transparent to the client. No DNS movement, no client reconfiguration.</li>
+      <li><strong>Single trust bundle for failover.</strong> Concatenating both cluster CAs into one PEM lets clients validate either side without per-cluster client config.</li>
+      <li><strong>AuthZ lives with the identity.</strong> ACLs on the KafkaUser CR mean the principal and its rights are reviewed together in the same MR.</li>
+      <li><strong>Reusable substrate.</strong> The same Kafka clusters carry the Redis WAL, the JBoss application stream, and any future producer that needs durability + replay — no new infrastructure per app.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
-    <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+  <section class="card callout-weakness">
+    <h3>Weaknesses &amp; known limitations</h3>
+    <ul>
+      <li><strong>One-way MM2.</strong> DC → DR only. If DR ever serves writes during a DC outage, those writes don't flow back when DC returns; reconciliation is manual.</li>
+      <li><strong><code>ANONYMOUS</code> super-user on DR.</strong> Unrestricted access from the broker's perspective for any unauthenticated client that reaches the listener. The NetworkPolicy and the edge HAProxy ACLs are the load-bearing safeguards; if either is bypassed, ANONYMOUS is the gap.</li>
+      <li><strong>SCRAM password sharing across clusters.</strong> The "same password on both sides" trick that makes failover trivial also means a leak forces a two-cluster rotation, and the password lives in a static Secret rather than a managed store.</li>
+      <li><strong>Truststore expiry is calendar-bound.</strong> The combined PEM must be regenerated before the earlier of the two cluster CAs expires. A missed reminder is a hard outage on TLS handshake day.</li>
+      <li><strong>No off-broker observability for MM2 lag.</strong> MM2's offset-sync topic is the source of truth for how far behind DR is, but there's no SigNoz dashboard for it yet.</li>
+      <li><strong>MM2 <code>jboss.*</code> exclusion is implicit.</strong> The external JBoss app's auth path is failover-aware but its data path is not. A reader who sees "external Kafka clients fail over transparently" might miss the topic-data gap.</li>
+      <li><strong>Cross-namespace secret bridging is imperative.</strong> The cluster CA + SCRAM creds are copied from <code>kafka</code> to consuming namespaces by hand at bootstrap; ExternalSecrets via Vault is queued in Phase R-G.</li>
+      <li><strong>No quotas, no retention SLO.</strong> Cluster-wide quotas (<code>producer_byte_rate</code>, <code>consumer_byte_rate</code>) are not configured per identity. A misbehaving producer can saturate a broker.</li>
+    </ul>
+  </section>
+
+  <section class="card callout-improvement">
+    <h3>How it should be improved</h3>
+    <ul>
+      <li><strong>Bidirectional replication.</strong> A second MM2 deployment on DC pulling from DR closes the post-DR-write recovery story. Avoid loops via topic-prefix conventions or MM2's <code>IdentityReplicationPolicy</code>.</li>
+      <li><strong>Drop <code>ANONYMOUS</code> super-user on DR.</strong> Replace with a dedicated <code>mm2</code> KafkaUser with the precise ACLs MM2 needs. Removes the catch-all and tightens audit.</li>
+      <li><strong>Per-identity quotas.</strong> Set <code>producer_byte_rate</code> and <code>consumer_byte_rate</code> on each <code>KafkaUser</code>; one runaway client can no longer starve the others.</li>
+      <li><strong>Lag SLO on MM2 + redis-applier.</strong> Wire <code>kafka_consumer_group_lag</code> (and the equivalent for MM2's offset-sync topic) into SigNoz; alert on minutes of lag.</li>
+      <li><strong>CA-rotation calendar item.</strong> Codify the annual combined-PEM refresh as a scheduled GitOps job (or at minimum a calendar reminder).</li>
+      <li><strong>ExternalSecrets via Vault.</strong> Replace the imperative secret bridging with ExternalSecrets sourced from Vault; rotate SCRAM passwords via Vault rather than static files.</li>
+      <li><strong>Schema registry.</strong> Track an Apicurio or Confluent Schema Registry deployment alongside Kafka so producers and consumers agree on wire format; also unblocks compacted "latest state" topics for the Redis WAL.</li>
+      <li><strong>OAuth (Keycloak) instead of SCRAM.</strong> Once Keycloak is the platform IdP, Strimzi supports <code>oauth</code> listener authentication. Tokens scoped per app + per topic prefix beats per-user SCRAM passwords.</li>
+      <li><strong>Active/active per-topic.</strong> For specific topics that need bidirectional traffic, set up MM2 with active/active mirroring + topic-prefix conventions to avoid loops.</li>
+    </ul>
+  </section>
+
+  <h2 class="section-rule">References</h2>
+  <section class="card">
+    <ul>
+      <li><a href="https://strimzi.io/">Strimzi operator</a> — the Kafka operator (0.46.1).</li>
+      <li><a href="https://kafka.apache.org/documentation/#kraft">Apache Kafka — KRaft mode</a>.</li>
+      <li><a href="https://strimzi.io/docs/operators/latest/configuring.html#type-KafkaListener-reference">Strimzi listener configuration</a> — listener types, <code>configuration.brokers[*].advertisedPort</code>, host overrides.</li>
+      <li>ADR-0018 — Redis-via-Kafka WAL (in <code>~/cloud-init/adr/</code>).</li>
+      <li><a href="https://www.rfc-editor.org/rfc/rfc4592">RFC 4592</a> — wildcard DNS records and "empty non-terminal" labels (the reason explicit A records were needed for nested broker FQDNs).</li>
+      <li>Cross-references in this catalogue:
+        <ul>
+          <li><a href="/tools/strimzi.html">Strimzi operator</a> — the operator that reconciles the <code>Kafka</code> CR.</li>
+          <li><a href="/tools/mirrormaker2.html">MirrorMaker 2</a> — DC → DR carrier.</li>
+          <li><a href="/tools/redis.html">Redis (RedisFailover)</a> — consumer of the WAL.</li>
+          <li><a href="/tools/redis-applier.html">redis-applier</a> — Kafka → Redis consumer.</li>
+          <li><a href="/tools/haproxy.html">HAProxy (edge)</a> — the SNI router for external clients.</li>
+          <li><a href="/tools/pdns.html">PowerDNS</a> — explicit A records for <code>bootstrap</code> + <code>broker-{0,1,2}</code>.</li>
+        </ul>
+      </li>
     </ul>
   </section>
 

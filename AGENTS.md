@@ -230,14 +230,33 @@ PY
 ```
 
 **Sidebar consistency check** — every page should have the same
-`<aside class="sidebar">…</aside>` block:
+`<aside class="sidebar">…</aside>` block, modulo the per-page
+`class="active"` / `aria-current="page"` attributes that mark the
+sidebar entry for the current page. The check below strips those
+before hashing:
 
 ```bash
-for f in index.html tools/*.html; do
-  python3 -c "import re,sys; s=open('$f').read(); m=re.search(r'<aside class=\"sidebar\".*?</aside>', s, re.S); print('$f', hash(m.group(0)) if m else 'NONE')"
-done | awk '{print $2}' | sort -u | wc -l
+python3 - <<'PY'
+import re, pathlib, hashlib
+from collections import Counter
+root = pathlib.Path('.')
+files = [root/'index.html'] + sorted((root/'tools').glob('*.html'))
+sb = set()
+for f in files:
+    m = re.search(r'<aside class="sidebar".*?</aside>', f.read_text(), re.S)
+    if not m:
+        sb.add('NONE'); continue
+    b = re.sub(r'\s*class="active"', '', m.group(0))
+    b = re.sub(r'\s*aria-current="page"', '', b)
+    sb.add(hashlib.sha1(b.encode()).hexdigest())
+print('sidebar variants (after stripping per-page active state):', len(sb))
 # Expected output: 1
+PY
 ```
+
+> The earlier one-liner that hashed the raw `<aside>` block (without
+> stripping `class="active"`) reported 23 variants on a healthy tree
+> — false positive. Use the script above.
 
 ### 5. Commit & push
 
