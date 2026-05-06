@@ -115,30 +115,40 @@
     <p>Plugs into cert-manager so wildcard certs and per-host certs in <code>*.apps.sub.comptech-lab.com</code> can be issued from Let's Encrypt without exposing port 80 publicly.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Each cluster runs its own webhook-pdns pod in the <code>cert-manager</code> namespace. cert-manager calls the webhook as a Kubernetes APIService extension when it processes a DNS-01 Challenge. The webhook in turn POSTs to PowerDNS's HTTP API at <code>http://160.30.63.133:8081</code> with the API key, creating a TXT record at <code>_acme-challenge.&lt;host&gt;</code>; once Let's Encrypt validates, cert-manager calls back to delete the record.</p>
+    <p>Both clusters' webhooks share the same PowerDNS server. The TXT records they write are short-lived (a few seconds) and don't conflict because each Challenge has a unique <code>_acme-challenge</code> token.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>shared/cluster-issuers/</code> (the ClusterIssuer references the webhook's GroupName and Solver name) plus <code>clusters/&lt;cluster&gt;/infra/cert-manager-webhook-pdns/</code> for chart values.</p>
+    <p>API key for PowerDNS lives in a Kubernetes Secret <code>cert-manager-webhook-pdns</code> in the <code>cert-manager</code> namespace, applied imperatively (out of git). Same key on both clusters since they target the same PowerDNS.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Verify the webhook is registered</strong>: <code>kubectl get apiservice | grep acme</code></li>
+      <li><strong>Watch a Challenge</strong>: <code>kubectl get challenges -A -w</code> during cert issuance.</li>
+      <li><strong>Check what TXT records are live in PowerDNS</strong>: <code>dig @160.30.63.133 _acme-challenge.&lt;host&gt; TXT +short</code></li>
+      <li><strong>Webhook logs</strong>: <code>kubectl -n cert-manager logs deploy/cert-manager-webhook-pdns</code></li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Per-cluster — DR has its own webhook talking to the same PowerDNS. If PowerDNS is unreachable, both clusters' challenges fail until it's back. There is no DR PowerDNS today (single point for the lab).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/cert-manager.html">cert-manager</a> — the consumer</li>
+      <li><a href="/tools/pdns.html">PowerDNS</a> — the target</li>
+      <li><a href="https://github.com/zachomedia/cert-manager-webhook-pdns">Upstream cert-manager-webhook-pdns</a></li>
+      <li><a href="https://cert-manager.io/docs/configuration/acme/dns01/webhook/">cert-manager DNS-01 webhook docs</a></li>
     </ul>
   </section>
 

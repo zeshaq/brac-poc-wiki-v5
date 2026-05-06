@@ -115,30 +115,40 @@
     <p>Longhorn provides the default storage class on each cluster and backs every StatefulSet PVC. Replication is handled inside the cluster — DC/DR durability of <em>application data</em> rides on Kafka MirrorMaker 2 and the redis-applier WAL, not on cross-cluster volume replication.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Longhorn is deployed in <code>longhorn-system</code> in each cluster. The default <code>StorageClass</code> is named <code>longhorn</code> with replica count 3 (one volume copy per node). Volumes are exposed as standard PVs to PVCs across the cluster; iSCSI is the in-cluster transport. Snapshots and (optionally) backups to S3-compatible storage are first-class concepts in Longhorn — currently snapshots are used ad-hoc, no scheduled snapshot policy is wired.</p>
+    <p>Cross-cluster volume replication is <strong>NOT</strong> in scope. Application-level durability rides on Kafka (MirrorMaker 2) for the WAL pattern, and on application-specific replication for Postgres (per-app StatefulSets in each cluster). Longhorn's volume-level cross-cluster replication is a paid feature and we don't use it.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Source: <code>clusters/&lt;cluster&gt;/infra/longhorn/</code> (chart values + StorageClass overrides). Standard install with the chart's defaults except <code>defaultDataPath</code> tuned to the lab's disk layout.</p>
+    <p>Apps that explicitly set <code>storageClassName: longhorn</code>: Vault (audit + data PVCs), Keycloak Postgres, Kafka brokers + controllers, Spotahome Redis, AWX Postgres, Terrakube Postgres + Redis, RedisInsight, SigNoz ClickHouse.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>kubectl -n longhorn-system port-forward svc/longhorn-frontend 8080:80</code> — there is no edge-routed Longhorn UI; admin-only.</li>
+      <li><strong>Volume health</strong>: <code>kubectl -n longhorn-system get volumes</code>, then <code>kubectl describe volume &lt;name&gt;</code> for replica state.</li>
+      <li><strong>Recover a degraded volume</strong>: usually self-healing if a node returns; for hard cases, the UI's "Salvage" button + replica delete is the path.</li>
+      <li><strong>Disk pressure</strong>: visible as <code>pending</code> volumes; Longhorn schedules to nodes with free space. Add disk via <code>node.longhorn.io</code> CRDs.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>No cross-cluster failover for volumes themselves. Each cluster owns its own data plane. When DC's Vault scales to 0, the Longhorn volumes detach cleanly; Vault's Raft data is preserved on the PVCs. Bringing the pods back attaches the volumes again — this is what happened during the 2026-05-04 Vault failover smoke test (~9 s edge HAProxy flip; volumes themselves were untouched on each side).</p>
+    <p>Application-level state replication that DOES survive cluster loss: Kafka + MirrorMaker 2 (data plane WAL), Vault logical replication via MinIO (Phase 2), per-app Postgres streaming where used.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://longhorn.io/docs/">Upstream Longhorn docs</a></li>
+      <li>ADR-0008 (LVM storage default — historical, RHACM hub fleet) — Longhorn applies only to the RKE2 lab clusters</li>
+      <li>STATE.md → "Foundation" row mentions agent2's Longhorn fix that brought DC/DR to parity</li>
     </ul>
   </section>
 

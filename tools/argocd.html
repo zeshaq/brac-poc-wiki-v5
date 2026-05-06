@@ -116,30 +116,43 @@
     <p>Argo CD runs in each RKE2 cluster as the GitOps controller and is the only way changes land in the platform. The DC and DR instances both watch the same monorepo (<code>infra/gitops-rke2</code>) but each scopes its reconciliation to its own <code>clusters/&lt;dc|dr&gt;/apps/</code> path, while sharing values from <code>shared/helm-values/</code>.</p><p>App-of-apps with a root glob means adding a new app is a single-file change: drop a YAML under the right cluster path and Argo CD picks it up.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>Bootstrap is two-stage. The <strong>root</strong> Application (out-of-band <code>kubectl apply</code> at install time) lives in <code>infra/argocd-bootstrap</code> and points to the <code>apps/</code> path of that repo. <strong>root-rke2</strong> (DC) / <strong>root-rke2-dr</strong> (DR) is the per-cluster app-of-apps Application, sourced from <code>infra/gitops-rke2</code>; its <code>directory.include</code> globs pick up <code>{argocd/projects/*.yaml,apps/*.yaml,infra/*.yaml,clusters/&lt;cluster&gt;/argocd/projects/*.yaml,clusters/&lt;cluster&gt;/apps/*.yaml,clusters/&lt;cluster&gt;/infra/*.yaml}</code>. Adding a new app is a single-file YAML drop under the right path.</p>
+    <p>Argo Projects scope what each cluster's apps can deploy: <code>rke2</code> (DC) and <code>rke2-dr</code> (DR) — copy-pasting an Application across clusters without flipping the project name fails the Application as <code>InvalidSpecError</code> (caught this way in MR !41).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>Apps generally use the <strong>two-source pattern</strong>: the chart from its upstream repo (e.g. <code>https://codecentric.github.io/helm-charts</code> for Keycloak), and value files from <code>infra/gitops-rke2</code> via <code>$values</code> ref — layered as <code>shared/helm-values/&lt;app&gt;.yaml</code> + <code>clusters/&lt;cluster&gt;/values/&lt;app&gt;.yaml</code>.</p>
+    <p>Default sync policy across most apps: <code>automated.prune=true, automated.selfHeal=true</code>; sync options <code>ServerSideApply=true, RespectIgnoreDifferences=true, CreateNamespace=true</code>. Sync-wave annotation orders the rollout (foundation 0–4, vault 5, replication 6, app workloads 10+, smoke / tools 25+).</p>
+    <p>Three apps currently show <strong>cosmetic OutOfSync</strong> (keycloak-prereqs, terrakube-prereqs, signoz) — K8s API-server defaults that aren't in git. Functional impact: zero. Clearing this is a Phase R-E follow-up via global <code>resource.customizations.ignoreDifferences</code> in argocd-cm.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>UI</strong>: <code>https://argocd.apps.sub.comptech-lab.com</code> (DC only).</li>
+      <li><strong>Force a refresh</strong>: <code>kubectl -n argocd patch app &lt;name&gt; --type=merge -p '{"operation":{"sync":{}}}'</code></li>
+      <li><strong>Suspend automation temporarily</strong> (e.g. for destructive maintenance): <code>kubectl patch app &lt;name&gt; --type=merge -p '{"spec":{"syncPolicy":{"automated":null}}}'</code></li>
+      <li><strong>Add a new Application</strong>: drop YAML at <code>clusters/&lt;cluster&gt;/apps/&lt;name&gt;.yaml</code>; the root-rke2 glob picks it up on the next reconcile (3 min default).</li>
+      <li>Argo CD itself is bootstrap-installed via <code>kubectl apply</code>, not via Argo. Reconciles itself though (root → argocd Application).</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>Argo CD instances are <strong>cluster-local</strong>: each cluster's controller manages its own apps. There is no DC↔DR Argo failover by design — losing DC just means DC apps don't reconcile until DC's Argo is back. DR keeps reconciling independently.</p>
+    <p>UI access is DC-only at the edge; if DC is down, DR's Argo UI is reachable in-cluster but not edge-routed.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2">infra/gitops-rke2</a> — application monorepo</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/argocd-bootstrap">infra/argocd-bootstrap</a> — root Application + bootstrap manifests</li>
+      <li>ADR-0002 (GitOps platform), ADR-0016 (RKE2 DC/DR platform)</li>
+      <li><a href="https://argo-cd.readthedocs.io/">Upstream Argo CD docs</a></li>
     </ul>
   </section>
 

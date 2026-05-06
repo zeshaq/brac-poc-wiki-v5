@@ -115,30 +115,41 @@
     <p>Standard cert-manager install per cluster. ClusterIssuers are defined once in <code>shared/cluster-issuers/</code> and applied to both clusters. Certificates issued for <code>*.apps.sub.comptech-lab.com</code> use DNS-01 via the webhook-pdns plugin.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Architecture</h2>
-    <p class="muted">Add diagrams or topology notes here — how this component sits relative to DC/DR, what replicates, and what speaks to it. Mermaid blocks render as plain text today; embed images under <code>/assets/</code> when needed.</p>
+    <p>cert-manager runs in the <code>cert-manager</code> namespace per cluster, each with its own pair of ClusterIssuers — <code>letsencrypt-staging</code> and <code>letsencrypt-prod</code>. Issuance uses the <strong>DNS-01</strong> challenge via the <a href="/tools/webhook-pdns.html">webhook-pdns</a> external solver: Let's Encrypt asks for a TXT record at <code>_acme-challenge.&lt;host&gt;</code>, the webhook writes it into PowerDNS, LE validates, the webhook deletes the TXT record.</p>
+    <p>DNS-01 is the right choice here because most cluster hostnames live under the wildcard <code>*.apps.sub.comptech-lab.com</code> and aren't directly reachable by Let's Encrypt's HTTP-01 prober. The DNS-01 path requires only that PowerDNS is authoritative for the zone (it is — see <a href="/tools/pdns.html">PowerDNS</a>).</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Configuration</h2>
-    <p class="muted">Add chart values overrides, important env vars, OIDC client config, secret references. Link to the source files in <code>infra/gitops-rke2</code> rather than copying YAML wholesale — the repo is the source of truth.</p>
+    <p>ClusterIssuers live at <code>shared/cluster-issuers/</code> in the GitOps repo. Each references the webhook-pdns ClusterIssuer-level <code>solvers[].dns01.webhook</code> with the PowerDNS API endpoint and an API-key Secret in the <code>cert-manager</code> namespace.</p>
+    <p>Most app Ingresses (Keycloak, Terrakube, AWX, Vault, Nexus, Jenkins, RedisInsight, SigNoz, etc.) carry <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code>. Issuance is automatic on first apply; renewals happen ~30 days before expiry without operator intervention.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Operations</h2>
-    <p class="muted">Add runbook notes: backup, restore, common troubleshooting, dashboards, on-call cheatsheet entries.</p>
+    <ul>
+      <li><strong>Inspect a cert lifecycle</strong>: <code>kubectl describe certificate &lt;name&gt; -n &lt;ns&gt;</code> shows the CertificateRequest / Order / Challenge chain.</li>
+      <li><strong>Force re-issue</strong>: delete the <code>Certificate</code> resource (Argo recreates via Helm chart) or delete the underlying TLS secret.</li>
+      <li><strong>Issuer health</strong>: <code>kubectl get clusterissuers</code> — both should report <code>Ready=True</code>.</li>
+      <li><strong>Rate limits</strong>: use <code>letsencrypt-staging</code> for any new app under iteration; <code>letsencrypt-prod</code> has 50 certs/week per registered domain.</li>
+    </ul>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>Failover</h2>
-    <p class="muted">Add DC/DR cutover/cutback notes: edge HAProxy backend name, healthcheck path, measured cutover/cutback times, smoke-test commands.</p>
+    <p>cert-manager is per-cluster — DR runs its own copy with identical ClusterIssuers. Each cluster issues certs for its own ingress objects independently. <strong>Same hostnames are issued twice</strong> (once per cluster) because each cluster's nginx-ingress terminates TLS for its own copy of the app — the active cluster's cert is what clients see at the edge.</p>
+    <p>If a hostname switches active sides (HAProxy <code>backup</code> keyword), the cert presented changes from the DC LE cert to the DR LE cert. Both are LE-signed and valid; no client reconfiguration needed.</p>
   </section>
 
-  <section class="card placeholder">
+  <section class="card">
     <h2>References</h2>
-    <ul class="muted">
-      <li>Add upstream chart / project links, ADR refs, MR links, and cross-references to other tools in this catalogue.</li>
+    <ul>
+      <li><a href="/tools/webhook-pdns.html">webhook-pdns</a> — DNS-01 solver implementation</li>
+      <li><a href="/tools/pdns.html">PowerDNS</a> — authoritative zone for <code>sub.comptech-lab.com</code></li>
+      <li><a href="https://cert-manager.io/docs/">Upstream cert-manager docs</a></li>
+      <li><a href="https://letsencrypt.org/docs/rate-limits/">Let's Encrypt rate limits</a></li>
     </ul>
   </section>
 
