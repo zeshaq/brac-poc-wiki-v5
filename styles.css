@@ -222,10 +222,12 @@ pre code {
   font-size: 19px;
 }
 .brand-title {
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  font-size: 17px;
+  color: #ffffff;
 }
+html[data-theme="light"] .brand-title { color: #0b1220; }
 .brand-sub {
   font-size: 13px;
   color: var(--text-mute);
@@ -353,7 +355,22 @@ pre code {
   padding: 0.65rem 1.25rem 1rem;
   font-size: 13px;
   color: var(--text-mute);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
 }
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-mute);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.footer-link:hover { color: var(--text); text-decoration: none; }
+.footer-link svg { display: block; }
+.footer-sep { opacity: 0.5; }
 
 /* content */
 .content {
