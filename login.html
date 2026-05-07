@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sign in — BRAC POC tools</title>
+<link rel="stylesheet" href="/styles.css" />
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+<style>
+  body.login { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 2rem 1rem; }
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 2.25rem 2rem 2rem;
+    border-radius: 14px;
+    background: var(--card-bg, #14161a);
+    border: 1px solid var(--card-border, rgba(255,255,255,0.06));
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .login-brand { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.5rem; }
+  .login-brand .brand-mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: #b71c1c; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1.2rem;
+  }
+  .login-brand .brand-title { font-weight: 600; letter-spacing: 0.02em; }
+  .login-brand .brand-sub { color: var(--muted, #8b94a4); font-size: 0.85rem; margin-top: 1px; }
+  .login-card h1 { margin: 0 0 0.25rem; font-size: 1.45rem; font-weight: 600; }
+  .login-lede { color: var(--muted, #8b94a4); margin: 0 0 1.5rem; font-size: 0.95rem; line-height: 1.45; }
+  .login-card form { display: grid; gap: 0.85rem; }
+  .login-card label { font-size: 0.85rem; font-weight: 500; color: var(--muted, #b3bbc8); }
+  .login-card input[type="text"], .login-card input[type="password"] {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--card-border, rgba(255,255,255,0.1));
+    background: var(--input-bg, rgba(255,255,255,0.04));
+    color: inherit;
+    font: inherit;
+    box-sizing: border-box;
+  }
+  .login-card input[type="text"]:focus, .login-card input[type="password"]:focus {
+    outline: none;
+    border-color: #b71c1c;
+    box-shadow: 0 0 0 3px rgba(183,28,28,0.18);
+  }
+  .login-card button {
+    margin-top: 0.5rem;
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    border: 0;
+    background: #b71c1c;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  .login-card button:hover { background: #a01818; }
+  .login-card button:active { transform: translateY(1px); }
+  .login-error {
+    margin: 1rem 0 0;
+    padding: 0.65rem 0.8rem;
+    border-radius: 8px;
+    background: rgba(183,28,28,0.12);
+    border: 1px solid rgba(183,28,28,0.35);
+    color: #f1c0c0;
+    font-size: 0.9rem;
+  }
+  .login-foot { margin-top: 1.4rem; font-size: 0.8rem; color: var(--muted, #8b94a4); }
+  html[data-theme="light"] .login-card { background: #ffffff; border-color: rgba(0,0,0,0.08); box-shadow: 0 20px 50px rgba(0,0,0,0.08); }
+  html[data-theme="light"] .login-card input { background: #f7f8fa; border-color: rgba(0,0,0,0.08); }
+</style>
+</head>
+<body class="login">
+  <main class="login-card" role="main" aria-labelledby="login-h">
+    <div class="login-brand">
+      <div class="brand-mark" aria-hidden="true">B</div>
+      <div>
+        <div class="brand-title">BRAC POC</div>
+        <div class="brand-sub">DC / DR tools catalogue</div>
+      </div>
+    </div>
+    <h1 id="login-h">Sign in</h1>
+    <p class="login-lede">This catalogue is restricted. Enter your credentials to continue.</p>
+    <form method="POST" action="/api/login" autocomplete="on" novalidate>
+      <input type="hidden" name="next" value="/" id="next-input" />
+      <div>
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" required autocomplete="username" autofocus />
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" />
+      </div>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="login-error" id="error-msg" hidden role="alert">Sign-in failed. Check the username and password and try again.</p>
+    <p class="login-foot">Sessions last 8 hours. Sign out via <code>/api/logout</code>.</p>
+  </main>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      if (params.get('error') === '1') {
+        document.getElementById('error-msg').hidden = false;
+      }
+      var next = params.get('next');
+      if (next && next.charAt(0) === '/' && next.charAt(1) !== '/') {
+        document.getElementById('next-input').value = next;
+      }
+    })();
+  </script>
+</body>
+</html>
