@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DefectDojo — BRAC POC tools</title>
+<title>DefectDojo — BFSI POC tools</title>
 <link rel="stylesheet" href="/styles.css" />
 <script>
   (function(){
@@ -23,7 +23,7 @@
 <div class="brand">
   <div class="brand-mark">B</div>
   <div>
-    <div class="brand-title">BRAC POC</div>
+    <div class="brand-title">BFSI POC</div>
     <div class="brand-sub">DC / DR tools</div>
   </div>
 </div>
@@ -128,7 +128,7 @@
   <section class="card">
     <h2>What it is</h2>
     <p>OWASP DefectDojo is a security findings management platform: it ingests scan output from many tools (Trivy, Trivy Operator, CycloneDX SBOM, Snyk, Bandit, Burp, ZAP, ...), de-duplicates findings, tracks them through engagements, and surfaces a single dashboard view. Here it is used as the <em>aggregation layer</em> above Trivy: the in-cluster operator on DC feeds into it (via the <code>trivy-defectdojo-bridge</code> CronJob), and the Jenkins CI flow uploads per-build results from each pipeline.</p>
-    <p><strong>Live as of 2026-05-06</strong>: 1 product (<em>BRAC POC RKE2</em>), 1 engagement (<em>trivy-operator-rke2-dc</em>), 213 tests, 1,800 findings (294 High, 549 Medium, 957 Low) — all from Trivy Operator's ConfigAudit reports. Vulnerability + SBOM ingest will populate once Trivy's image-scan Jobs finish their first DB pull.</p>
+    <p><strong>Live as of 2026-05-06</strong>: 1 product (<em>BFSI POC RKE2</em>), 1 engagement (<em>trivy-operator-rke2-dc</em>), 213 tests, 1,800 findings (294 High, 549 Medium, 957 Low) — all from Trivy Operator's ConfigAudit reports. Vulnerability + SBOM ingest will populate once Trivy's image-scan Jobs finish their first DB pull.</p>
   </section>
 
   <section class="card">

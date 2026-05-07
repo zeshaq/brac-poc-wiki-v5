@@ -1,6 +1,6 @@
 // /api/logout -- clears the session cookie and redirects to /login.
 
-const COOKIE_NAME = "brac_session";
+const COOKIE_NAME = "bfsi_session";
 
 export const onRequest = async () => {
   const headers = new Headers();

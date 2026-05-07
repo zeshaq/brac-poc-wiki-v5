@@ -2,10 +2,10 @@
 //
 // Inputs (form-urlencoded POST):
 //   username, password, next
-// On success: 302 -> next (or "/"), Set-Cookie: brac_session=<ts>.<hmac>.
+// On success: 302 -> next (or "/"), Set-Cookie: bfsi_session=<ts>.<hmac>.
 // On failure: 302 -> /login?error=1&next=<next>.
 
-const COOKIE_NAME = "brac_session";
+const COOKIE_NAME = "bfsi_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 
 function safeCompare(a, b) {

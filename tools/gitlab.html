@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GitLab — BRAC POC tools</title>
+<title>GitLab — BFSI POC tools</title>
 <link rel="stylesheet" href="/styles.css" />
 <script>
   (function(){
@@ -23,7 +23,7 @@
 <div class="brand">
   <div class="brand-mark">B</div>
   <div>
-    <div class="brand-title">BRAC POC</div>
+    <div class="brand-title">BFSI POC</div>
     <div class="brand-sub">DC / DR tools</div>
   </div>
 </div>
@@ -115,7 +115,7 @@
     <h2>Quick facts</h2>
     <dl class="meta meta-grid">
       <dt>Form</dt><dd>VM on <code>br30</code>, not a per-cluster deployment</dd>
-      <dt>Hosts</dt><dd><code>infra/gitops-rke2</code>, BRAC POC docs / wiki</dd>
+      <dt>Hosts</dt><dd><code>infra/gitops-rke2</code>, BFSI POC docs / wiki</dd>
       <dt>Auth</dt><dd>Local admin (legacy WSO2 IS OIDC dead — see STATE notes)</dd>
     </dl>
   </section>
@@ -127,7 +127,7 @@
 
   <section class="card">
     <h2>Architecture</h2>
-    <p>GitLab Omnibus 18.11.1 (CE) on a dedicated VM at <code>30.30.30.5</code> (br30). Single instance for the lab — there is no DC/DR pair. Hosted projects: <code>infra/argocd-bootstrap</code> (root Argo CD bootstrap), <code>infra/gitops-rke2</code> (the application monorepo), <code>brac/brac-poc-docs</code> (issues/MRs only — wiki feature was decommissioned 2026-05-06; presentation surface moved to <a href="https://brac-poc-wiki-v5.pages.dev">brac-poc-wiki-v5.pages.dev</a>).</p>
+    <p>GitLab Omnibus 18.11.1 (CE) on a dedicated VM at <code>30.30.30.5</code> (br30). Single instance for the lab — there is no DC/DR pair. Hosted projects: <code>infra/argocd-bootstrap</code> (root Argo CD bootstrap), <code>infra/gitops-rke2</code> (the application monorepo), <code>bfsi/bfsi-poc-docs</code> (issues/MRs only — wiki feature was decommissioned 2026-05-06; presentation surface moved to <a href="https://rke-poc-platform-v5.pages.dev">rke-poc-platform-v5.pages.dev</a>).</p>
     <p>As of 2026-05-06, the same VM also hosts a <strong>GitLab Runner</strong> as a Docker container (<code>gitlab/gitlab-runner:v18.11.2</code>) so CI on the GitOps repo runs again. Runner uses Docker executor (host <code>/var/run/docker.sock</code> mount), <code>concurrent=4</code>, project-scoped to <code>infra/gitops-rke2</code>.</p>
   </section>
 
@@ -159,7 +159,7 @@
     <h2>References</h2>
     <ul>
       <li><a href="https://gitlab.apps.sub.comptech-lab.com/infra/gitops-rke2">infra/gitops-rke2</a> — application monorepo</li>
-      <li><a href="https://gitlab.apps.sub.comptech-lab.com/brac/brac-poc-docs">brac/brac-poc-docs</a> — issues/MRs (wiki retired)</li>
+      <li><a href="https://gitlab.apps.sub.comptech-lab.com/bfsi/bfsi-poc-docs">bfsi/bfsi-poc-docs</a> — issues/MRs (wiki retired)</li>
       <li>memory: <code>feedback_gitlab_credentials.md</code> (use md user PAT)</li>
       <li><a href="https://docs.gitlab.com/ee/install/installation.html">GitLab Omnibus install</a> · <a href="https://docs.gitlab.com/runner/">GitLab Runner docs</a></li>
     </ul>

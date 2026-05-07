@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Trivy Operator — BRAC POC tools</title>
+<title>Trivy Operator — BFSI POC tools</title>
 <link rel="stylesheet" href="/styles.css" />
 <script>
   (function(){
@@ -23,7 +23,7 @@
 <div class="brand">
   <div class="brand-mark">B</div>
   <div>
-    <div class="brand-title">BRAC POC</div>
+    <div class="brand-title">BFSI POC</div>
     <div class="brand-sub">DC / DR tools</div>
   </div>
 </div>
@@ -133,7 +133,7 @@
   <section class="card">
     <h2>Architecture</h2>
     <p>Single Deployment (the operator) on each cluster. No DaemonSet for v0.1 (the optional <code>node-collector</code> DaemonSet — which mounts host paths to do CIS/NSA compliance — is disabled). Per-image scans run as transient Jobs scheduled by the operator with a concurrency limit of 5 at a time and a 30 s retry delay; results land in the workload's own namespace.</p>
-    <p>The <em>data flow</em>: Pod created → Operator schedules scan Job → Trivy container in Job downloads vuln DB and SBOM-extracts the image → writes CRD in workload namespace → bridge CronJob (hourly @:30) lists all CRDs and POSTs each item to <code>/api/v2/import-scan/</code> with <code>scan_type=Trivy Operator Scan</code>, <code>product_type_name=Platform</code>, <code>product_name="BRAC POC RKE2"</code>, <code>engagement_name="trivy-operator-rke2-dc"</code>, and a per-item <code>tag</code>. DefectDojo de-duplicates findings within the engagement.</p>
+    <p>The <em>data flow</em>: Pod created → Operator schedules scan Job → Trivy container in Job downloads vuln DB and SBOM-extracts the image → writes CRD in workload namespace → bridge CronJob (hourly @:30) lists all CRDs and POSTs each item to <code>/api/v2/import-scan/</code> with <code>scan_type=Trivy Operator Scan</code>, <code>product_type_name=Platform</code>, <code>product_name="BFSI POC RKE2"</code>, <code>engagement_name="trivy-operator-rke2-dc"</code>, and a per-item <code>tag</code>. DefectDojo de-duplicates findings within the engagement.</p>
   </section>
 
   <section class="card">

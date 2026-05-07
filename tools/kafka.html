@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Apache Kafka (KRaft) — BRAC POC tools</title>
+<title>Apache Kafka (KRaft) — BFSI POC tools</title>
 <link rel="stylesheet" href="/styles.css" />
 <script>
   (function(){
@@ -23,7 +23,7 @@
 <div class="brand">
   <div class="brand-mark">B</div>
   <div>
-    <div class="brand-title">BRAC POC</div>
+    <div class="brand-title">BFSI POC</div>
     <div class="brand-sub">DC / DR tools</div>
   </div>
 </div>
@@ -178,7 +178,7 @@
 
   <h2 class="section-rule">External access via the edge</h2>
   <section class="card">
-    <p>Off-cluster clients (Java/JBoss apps on BRAC spoke networks, <code>kcat</code> on the lab host, anything outside the RKE2 clusters) reach Kafka through the edge HAProxy. The path is pure TCP + SNI passthrough — HAProxy never decrypts the TLS, it just reads the Server Name Indication and forwards the original handshake to ingress-nginx, which forwards it to the broker.</p>
+    <p>Off-cluster clients (Java/JBoss apps on BFSI spoke networks, <code>kcat</code> on the lab host, anything outside the RKE2 clusters) reach Kafka through the edge HAProxy. The path is pure TCP + SNI passthrough — HAProxy never decrypts the TLS, it just reads the Server Name Indication and forwards the original handshake to ingress-nginx, which forwards it to the broker.</p>
     <pre><code>client                          edge HAProxy           ingress-nginx          Strimzi
                                 (br30, public)         (in cluster)            broker
   │                                   │                      │                    │

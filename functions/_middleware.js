@@ -1,11 +1,11 @@
-// Auth gate for the BRAC POC wiki.
+// Auth gate for the BFSI POC wiki.
 //
 // Every non-public request must carry a valid signed session cookie.
 // Public paths (login form, login/logout API, the shared stylesheet for
 // the login form, favicon, robots) are allowed through unauthenticated.
 // Anything else: 302 -> /login?next=<original path>.
 
-const COOKIE_NAME = "brac_session";
+const COOKIE_NAME = "bfsi_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60; // 8 hours
 
 const PUBLIC_EXACT = new Set([

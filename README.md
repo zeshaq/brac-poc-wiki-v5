@@ -1,9 +1,9 @@
-# brac-poc-wiki-v5
+# rke-poc-platform-v5
 
-Static catalogue of the tools deployed across the BRAC POC's RKE2 DC/DR
+Static catalogue of the tools deployed across the BFSI POC's RKE2 DC/DR
 clusters and shared infrastructure VMs.
 
-- Live at <https://brac-poc-wiki-v5.pages.dev>
+- Live at <https://rke-poc-platform-v5.pages.dev>
 - One page per tool under `tools/<id>.html`
 - Plain static HTML + CSS, no build step
 
@@ -29,7 +29,7 @@ Cloudflare Pages, Direct Upload — `git push` does **not** auto-deploy:
 CLOUDFLARE_API_TOKEN=$(cat ~/cloud-init/scripts/agent3/cloudflare-token) \
 CLOUDFLARE_ACCOUNT_ID=f0385fc5f0057b2573ae2a6b4c034c45 \
   npx --yes wrangler@latest pages deploy . \
-    --project-name=brac-poc-wiki-v5 \
+    --project-name=rke-poc-platform-v5 \
     --branch=main \
     --commit-dirty=true
 ```

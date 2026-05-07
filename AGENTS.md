@@ -1,8 +1,8 @@
-# AGENTS.md — brac-poc-wiki-v5
+# AGENTS.md — rke-poc-platform-v5
 
 Guide for any agent (or human) editing this site. **Read this first.**
 
-The site is a static catalogue of tools deployed across the BRAC POC's
+The site is a static catalogue of tools deployed across the BFSI POC's
 RKE2 DC/DR clusters. It is a multi-page site: one landing page, one
 page per tool. It's served from this repo on Cloudflare Pages.
 
@@ -10,9 +10,9 @@ page per tool. It's served from this repo on Cloudflare Pages.
 
 ## What this site is
 
-- **Repo:** <https://github.com/zeshaq/brac-poc-wiki-v5>
-- **Production URL:** <https://brac-poc-wiki-v5.pages.dev>
-- **Cloudflare project:** `brac-poc-wiki-v5` (Pages, **Direct Upload — not git-integrated**)
+- **Repo:** <https://github.com/zeshaq/rke-poc-platform-v5>
+- **Production URL:** <https://rke-poc-platform-v5.pages.dev>
+- **Cloudflare project:** `rke-poc-platform-v5` (Pages, **Direct Upload — not git-integrated**)
 - **Cloudflare account ID:** `f0385fc5f0057b2573ae2a6b4c034c45`
 - **Production branch:** `main`
 
@@ -96,19 +96,19 @@ clusters, it can go on the site. If not, leave it off.
 
 ### 0. Get the working tree
 
-If `/tmp/brac-poc-wiki-v5/` exists from a prior session you can reuse
+If `/tmp/rke-poc-platform-v5/` exists from a prior session you can reuse
 it. Otherwise:
 
 ```bash
-git clone https://github.com/zeshaq/brac-poc-wiki-v5.git /tmp/brac-poc-wiki-v5
-cd /tmp/brac-poc-wiki-v5
+git clone https://github.com/zeshaq/rke-poc-platform-v5.git /tmp/rke-poc-platform-v5
+cd /tmp/rke-poc-platform-v5
 ```
 
 For pushes, authenticate with the `zeshaq` GitHub PAT:
 
 ```bash
 GH_TOKEN=$(cat ~/cloud-init/scripts/agent3/gh-zeshaq-token)
-git push "https://zeshaq:${GH_TOKEN}@github.com/zeshaq/brac-poc-wiki-v5.git" main
+git push "https://zeshaq:${GH_TOKEN}@github.com/zeshaq/rke-poc-platform-v5.git" main
 ```
 
 The token (`ghp_…`) is at `~/cloud-init/scripts/agent3/gh-zeshaq-token`
@@ -197,7 +197,7 @@ This touches more files. Checklist:
 ### 4. Smoke-check locally
 
 ```bash
-cd /tmp/brac-poc-wiki-v5
+cd /tmp/rke-poc-platform-v5
 python3 -m http.server 8080 &
 SERVER_PID=$!
 sleep 1
@@ -264,7 +264,7 @@ PY
 git -c user.name="Zahid Eshaque" -c user.email="zeshaq@gmail.com" \
   commit -am "Update <Tool>: <what changed>"
 GH_TOKEN=$(cat ~/cloud-init/scripts/agent3/gh-zeshaq-token)
-git push "https://zeshaq:${GH_TOKEN}@github.com/zeshaq/brac-poc-wiki-v5.git" main
+git push "https://zeshaq:${GH_TOKEN}@github.com/zeshaq/rke-poc-platform-v5.git" main
 ```
 
 ### 6. Deploy to Cloudflare Pages
@@ -273,18 +273,18 @@ git push "https://zeshaq:${GH_TOKEN}@github.com/zeshaq/brac-poc-wiki-v5.git" mai
 CLOUDFLARE_API_TOKEN=$(cat ~/cloud-init/scripts/agent3/cloudflare-token) \
 CLOUDFLARE_ACCOUNT_ID=f0385fc5f0057b2573ae2a6b4c034c45 \
   npx --yes wrangler@latest pages deploy . \
-    --project-name=brac-poc-wiki-v5 \
+    --project-name=rke-poc-platform-v5 \
     --branch=main \
     --commit-dirty=true
 ```
 
-Wrangler prints a preview URL (`<hash>.brac-poc-wiki-v5.pages.dev`)
+Wrangler prints a preview URL (`<hash>.rke-poc-platform-v5.pages.dev`)
 and promotes the production URL. Verify:
 
 ```bash
-curl -sI https://brac-poc-wiki-v5.pages.dev/                       | head -1
-curl -sI https://brac-poc-wiki-v5.pages.dev/styles.css             | head -1
-curl -sI https://brac-poc-wiki-v5.pages.dev/tools/keycloak.html    | head -1
+curl -sI https://rke-poc-platform-v5.pages.dev/                       | head -1
+curl -sI https://rke-poc-platform-v5.pages.dev/styles.css             | head -1
+curl -sI https://rke-poc-platform-v5.pages.dev/tools/keycloak.html    | head -1
 ```
 
 If any check fails, scroll back through the wrangler output for upload
@@ -296,7 +296,7 @@ Per the project's session-continuity convention:
 
 - Append a one-line entry under today's heading in
   `~/cloud-init/scripts/agent3/CHANGELOG.md`
-  (e.g. *"brac-poc-wiki-v5: filled Architecture section on
+  (e.g. *"rke-poc-platform-v5: filled Architecture section on
   tools/kafka.html; redeployed; HTTP 200"*).
 - For material changes (new tool page, version bump, deprecation),
   also touch `~/cloud-init/scripts/agent3/STATE.md`.
@@ -334,7 +334,7 @@ agent3 one (it was provisioned for `zeshaq`'s personal repos).
   with real content, drop the `placeholder` class on the `<section>`
   so the dashed outline goes away — that's the visual cue to readers
   that the page is no longer stubbed in that area.
-- **No analytics, no tracking scripts.** Intentional for the BRAC
+- **No analytics, no tracking scripts.** Intentional for the BFSI
   presentation context. Don't add any.
 - **Don't introduce a SPA framework, build step, or CSS preprocessor.**
   The whole site is plain HTML + one CSS file. That's a feature.
@@ -348,9 +348,9 @@ agent3 one (it was provisioned for `zeshaq`'s personal repos).
 
 ## How this was first stood up (for reference)
 
-1. Created GitHub repo `zeshaq/brac-poc-wiki-v5` via REST API with
+1. Created GitHub repo `zeshaq/rke-poc-platform-v5` via REST API with
    the zeshaq PAT.
-2. Created Cloudflare Pages project `brac-poc-wiki-v5` (Direct
+2. Created Cloudflare Pages project `rke-poc-platform-v5` (Direct
    Upload, prod branch `main`) via API on account
    `f0385fc5f0057b2573ae2a6b4c034c45`.
 3. Initial deploy was a single-page site (`index.html` only). It was
@@ -360,7 +360,7 @@ agent3 one (it was provisioned for `zeshaq`'s personal repos).
    generator from a tools manifest; that generator was **not**
    committed — once written, the static HTML files are canonical and
    are edited directly.
-4. `npx wrangler pages deploy . --project-name=brac-poc-wiki-v5
+4. `npx wrangler pages deploy . --project-name=rke-poc-platform-v5
    --branch=main` for every redeploy.
 
 If you ever need to nuke and redo: delete the GitHub repo + the
