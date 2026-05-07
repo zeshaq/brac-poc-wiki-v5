@@ -221,13 +221,15 @@ pre code {
   justify-content: center;
   font-size: 19px;
 }
-.brand-title {
+.sidebar .brand-link .brand-title,
+.login-brand .brand-title {
   font-weight: 700;
   letter-spacing: 0.4px;
   font-size: 17px;
   color: #ffffff;
 }
-html[data-theme="light"] .brand-title { color: #0b1220; }
+html[data-theme="light"] .sidebar .brand-link .brand-title,
+html[data-theme="light"] .login-brand .brand-title { color: #0b1220; }
 .brand-sub {
   font-size: 13px;
   color: var(--text-mute);
