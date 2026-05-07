@@ -228,7 +228,9 @@ pre code {
   font-size: 17px;
   color: #ffffff;
 }
-html[data-theme="light"] .sidebar .brand-link .brand-title,
+/* Sidebar stays dark in both themes (see [data-theme="light"] .sidebar
+   re-scope above), so the sidebar brand title stays white in both themes.
+   Only the login card flips with the page theme. */
 html[data-theme="light"] .login-brand .brand-title { color: #0b1220; }
 .brand-sub {
   font-size: 13px;
